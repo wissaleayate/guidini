@@ -3,23 +3,33 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "prebuild": "node -e \"const { execSync } = require('child_process'); try { execSync('cmd /c attrib -r -s .next /s /d', { stdio: 'ignore' }); } catch {} try { require('fs').rmSync('.next', { recursive: true, force: true }); } catch {}\"",
+    "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "admin:promote": "node scripts/provision-admin.mjs",
+    "test:access": "node scripts/test-access-control.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "lucide-react": "^1.61.0",
     "next": "16.4.3",
+    "papaparse": "^5.7.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "postcss": "^8.5.31",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

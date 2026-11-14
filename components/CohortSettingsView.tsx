@@ -24,6 +24,10 @@ export function CohortSettingsView({ initialCohort }: CohortSettingsViewProps) {
   const [academicYear, setAcademicYear] = useState(initialCohort.academic_year);
   const [studyYear, setStudyYear] = useState(initialCohort.study_year);
   const [semester, setSemester] = useState(initialCohort.semester);
+  const [currentUnitName, setCurrentUnitName] = useState(initialCohort.current_unit_name || 'Unité 01 – Cardiovasculo-Pulmonaire');
+  const [currentUnitStatus, setCurrentUnitStatus] = useState<'in_progress' | 'completed' | 'archived'>(
+    initialCohort.current_unit_status || 'in_progress'
+  );
   const [inviteCode, setInviteCode] = useState(initialCohort.invite_code);
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -55,6 +59,8 @@ export function CohortSettingsView({ initialCohort }: CohortSettingsViewProps) {
         academic_year: academicYear.trim(),
         study_year: studyYear.trim(),
         semester: semester.trim(),
+        current_unit_name: currentUnitName.trim(),
+        current_unit_status: currentUnitStatus,
         invite_code: inviteCode.trim().toUpperCase(),
       });
       setCohort(updated);
@@ -158,6 +164,37 @@ export function CohortSettingsView({ initialCohort }: CohortSettingsViewProps) {
                   placeholder="DFGSM 2 (Deuxième Année)"
                   className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Unité d'enseignement intégrée active
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={currentUnitName}
+                  onChange={(e) => setCurrentUnitName(e.target.value)}
+                  placeholder="Ex: Unité 01 – Cardiovasculo-Pulmonaire"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Statut de l'Unité d'enseignement
+                </label>
+                <select
+                  value={currentUnitStatus}
+                  onChange={(e) => setCurrentUnitStatus(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-white"
+                >
+                  <option value="in_progress">En cours (In progress)</option>
+                  <option value="completed">Terminée (Programme achevé)</option>
+                  <option value="archived">Archivée</option>
+                </select>
               </div>
             </div>
 

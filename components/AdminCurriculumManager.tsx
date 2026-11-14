@@ -7,6 +7,7 @@ import {
   Unit,
   Lesson,
   LessonDifficulty,
+  AcademicUnit,
 } from '@/lib/types/database';
 import {
   Search,
@@ -27,6 +28,8 @@ import {
   FolderPlus,
   Layers,
   HelpCircle,
+  Bookmark,
+  Sparkles,
 } from 'lucide-react';
 import { LessonEditModal } from './LessonEditModal';
 import { SubjectCreateModal } from './SubjectCreateModal';
@@ -36,11 +39,18 @@ import { exportCurriculumToCSV } from '@/lib/services/import-parser';
 
 interface AdminCurriculumManagerProps {
   initialSubjects: SubjectWithUnits[];
+  academicUnits?: AcademicUnit[];
   onRefresh?: () => Promise<void>;
 }
 
-export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurriculumManagerProps) {
+export function AdminCurriculumManager({
+  initialSubjects,
+  academicUnits = [],
+  onRefresh,
+}: AdminCurriculumManagerProps) {
   const [subjects, setSubjects] = useState<SubjectWithUnits[]>(initialSubjects);
+  const [unitsList, setUnitsList] = useState<AcademicUnit[]>(academicUnits);
+  const [activeCategoryTab, setActiveCategoryTab] = useState<'all' | 'units' | 'independent'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSemester, setSelectedSemester] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
@@ -97,15 +107,26 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
     if (onRefresh) {
       await onRefresh();
     }
-    const fresh = await CohortService.getCurriculumTree();
+    const [fresh, freshUnits] = await Promise.all([
+      CohortService.getCurriculumTree(),
+      CohortService.getAcademicUnits(),
+    ]);
     setSubjects(fresh);
+    setUnitsList(freshUnits);
   };
 
   // =========================================================================
   // SUBJECT ACTIONS
   // =========================================================================
 
-  const handleSaveSubject = async (name: string, code: string, color: string, semester: string) => {
+  const handleSaveSubject = async (
+    name: string,
+    code: string,
+    color: string,
+    semester: string,
+    academicUnitId?: string | null,
+    isIndependent?: boolean
+  ) => {
     try {
       if (editingSubject.subject) {
         await CohortService.updateSubject(editingSubject.subject.id, {
@@ -113,10 +134,12 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
           code,
           color,
           semester,
+          academic_unit_id: academicUnitId,
+          is_independent: isIndependent,
         });
         showFeedback('success', `Module "${name}" mis à jour avec succès.`);
       } else {
-        await CohortService.createSubject(name, code, color, semester);
+        await CohortService.createSubject(name, code, color, semester, academicUnitId, isIndependent);
         showFeedback('success', `Nouveau module "${name}" créé avec succès.`);
       }
       await reloadData();
@@ -206,15 +229,22 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
     durationMin: number;
     revisionTarget: number;
     notes?: string;
+    description?: string;
+    sourceFileRef?: string;
+    isAvailable?: boolean;
   }) => {
     try {
       if (data.id) {
         await CohortService.updateLesson(data.id, {
+          unit_id: data.unitId,
           title: data.title,
           difficulty: data.difficulty,
           estimated_duration_min: data.durationMin,
           revision_target: data.revisionTarget,
           notes: data.notes,
+          description: data.description,
+          source_file_ref: data.sourceFileRef,
+          is_available: data.isAvailable,
         });
         showFeedback('success', `Cours "${data.title}" mis à jour (la progression des étudiants reste préservée).`);
       } else {
@@ -224,13 +254,30 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
           data.difficulty,
           data.durationMin,
           data.revisionTarget,
-          data.notes
+          data.notes,
+          data.description,
+          data.sourceFileRef,
+          data.isAvailable
         );
         showFeedback('success', `Nouveau cours "${data.title}" ajouté au cursus.`);
       }
       await reloadData();
     } catch (err: any) {
       showFeedback('error', err?.message || 'Erreur lors de l\'enregistrement du cours.');
+    }
+  };
+
+  const handleToggleAvailability = async (lesson: Lesson) => {
+    const newStatus = !(lesson.is_available !== false);
+    try {
+      await CohortService.toggleLessonAvailability(lesson.id, newStatus);
+      showFeedback(
+        'success',
+        `Cours "${lesson.title}" marqué comme ${newStatus ? 'disponible' : 'temporairement indisponible'}.`
+      );
+      await reloadData();
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Erreur lors de la modification de disponibilité');
     }
   };
 
@@ -328,7 +375,17 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
 
   const filteredSubjects = useMemo(() => {
     return subjects
-      .filter((s) => (selectedSemester === 'all' ? true : s.semester === selectedSemester))
+      .filter((s) => {
+        const matchSem = selectedSemester === 'all' ? true : s.semester === selectedSemester;
+        const isInd = s.is_independent || !s.academic_unit_id;
+        const matchTab =
+          activeCategoryTab === 'all'
+            ? true
+            : activeCategoryTab === 'units'
+            ? !isInd
+            : isInd;
+        return matchSem && matchTab;
+      })
       .map((s) => {
         const filteredUnits = s.units.map((u) => {
           const filteredLessons = u.lessons.filter((l) => {
@@ -354,7 +411,7 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
         };
       })
       .filter((s) => s.units.length > 0 || searchQuery.trim() === '');
-  }, [subjects, searchQuery, selectedSemester, selectedDifficulty]);
+  }, [subjects, searchQuery, selectedSemester, selectedDifficulty, activeCategoryTab]);
 
   // Overall metrics
   const totalUnits = subjects.reduce((acc, s) => acc + s.units.length, 0);
@@ -386,15 +443,21 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
       <div className="bg-gradient-to-r from-teal-800 via-slate-900 to-slate-950 rounded-3xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-semibold mb-3">
-              <Layers className="w-3.5 h-3.5" />
-              Espace Administrateur • Gestionnaire Complet du Cursus
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-semibold mb-3 flex-wrap">
+              <span className="flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" />
+                Unité 01 – Cardiovasculo-Pulmonaire
+              </span>
+              <span>•</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[11px] font-bold">
+                Statut : En cours d'enseignement
+              </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Gestionnaire du Curriculum Médical
             </h1>
             <p className="text-teal-100/90 text-xs sm:text-sm max-w-2xl mt-1.5 leading-relaxed">
-              Créez, modifiez, réorganisez et supprimez en toute sécurité les modules, unités d'enseignement et cours officiels de la cohorte.
+              Consultez et enrichissez les modules et cours d'archive de l'Unité 01. Vous pouvez ajouter de nouvelles séances, modifier les intitulés et déplacer les cours à tout moment sans réinitialiser la progression des étudiants.
             </p>
           </div>
 
@@ -473,6 +536,43 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
           <span>{feedback.message}</span>
         </div>
       )}
+
+      {/* Category Tabs: All / Grandes Unités / Modules Indépendants */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 flex-wrap">
+        <button
+          onClick={() => setActiveCategoryTab('all')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeCategoryTab === 'all'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Toutes les matières ({subjects.length})
+        </button>
+        <button
+          onClick={() => setActiveCategoryTab('units')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeCategoryTab === 'units'
+              ? 'bg-teal-600 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          Grandes Unités Intégrées ({subjects.filter((s) => !s.is_independent && s.academic_unit_id).length} modules)
+        </button>
+        <button
+          onClick={() => setActiveCategoryTab('independent')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeCategoryTab === 'independent'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Bookmark className="w-3.5 h-3.5" />
+          Modules Indépendants ({subjects.filter((s) => s.is_independent || !s.academic_unit_id).length} matières)
+        </button>
+      </div>
 
       {/* Search & Filters */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
@@ -776,16 +876,50 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
                                             <RotateCw className="w-3 h-3 text-teal-600" />
                                             Cible: {lesson.revision_target || 3} tours
                                           </span>
+                                          {lesson.is_available === false ? (
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                                              Archive en attente
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                              Disponible
+                                            </span>
+                                          )}
                                         </div>
-                                        {lesson.notes && (
+                                        {lesson.source_file_ref && (
+                                          <div className="text-[11px] text-teal-700 font-medium flex items-center gap-1.5 mb-1">
+                                            <span>📄 Support :</span>
+                                            <span className="font-mono bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200/60">
+                                              {lesson.source_file_ref}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {(lesson.description || lesson.notes) && (
                                           <p className="text-xs text-slate-500 line-clamp-1 pl-4 border-l border-slate-200">
-                                            {lesson.notes}
+                                            {lesson.description || lesson.notes}
                                           </p>
                                         )}
                                       </div>
 
-                                      {/* Right Controls: Reorder, Edit, Delete */}
-                                      <div className="flex items-center gap-1 justify-end shrink-0">
+                                      {/* Right Controls: Availability, Reorder, Edit, Delete */}
+                                      <div className="flex items-center gap-1.5 justify-end shrink-0">
+                                        {/* Toggle availability button */}
+                                        <button
+                                          onClick={() => handleToggleAvailability(lesson)}
+                                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                            lesson.is_available !== false
+                                              ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-800'
+                                              : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-emerald-50 hover:text-emerald-800'
+                                          }`}
+                                          title={
+                                            lesson.is_available !== false
+                                              ? 'Rendre temporairement indisponible'
+                                              : 'Rendre disponible pour les étudiants'
+                                          }
+                                        >
+                                          {lesson.is_available !== false ? 'Désactiver' : 'Activer'}
+                                        </button>
+
                                         {/* Reorder Arrows */}
                                         <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
                                           <button
@@ -902,6 +1036,7 @@ export function AdminCurriculumManager({ initialSubjects, onRefresh }: AdminCurr
         <SubjectCreateModal
           isOpen={editingSubject.isOpen}
           initialSubject={editingSubject.subject}
+          academicUnits={unitsList}
           onClose={() => setEditingSubject({ isOpen: false, subject: null })}
           onSave={handleSaveSubject}
         />

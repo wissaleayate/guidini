@@ -1,6 +1,5 @@
-'use client';
+export const dynamic = 'force-dynamic';
 
-import React from 'react';
 import { CsvImportView } from '@/components/CsvImportView';
 
 export default function AdminImportPage() {

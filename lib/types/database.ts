@@ -6,12 +6,18 @@ export type LessonStatus = 'not_started' | 'in_progress' | 'completed' | 'needs_
 
 export type ExamType = 'Examen Final' | 'Contrôle Continu' | 'Rattrapage' | 'TP/Stage';
 
+export type AcademicUnitStatus = 'not_started' | 'in_progress' | 'completed' | 'archived';
+
+export type ExamTargetType = 'unit' | 'independent_module';
+
 export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
   role: UserRole;
   cohort_id: string | null;
+  is_active?: boolean;
+  status?: 'active' | 'suspended' | 'revoked';
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +29,8 @@ export interface Cohort {
   study_year: string;
   semester: string;
   invite_code: string;
+  current_unit_name?: string;
+  current_unit_status?: 'in_progress' | 'completed' | 'archived';
   created_by?: string | null;
   created_at: string;
   updated_at: string;
@@ -50,9 +58,27 @@ export interface CohortInvite {
   created_at: string;
 }
 
+export interface AcademicUnit {
+  id: string;
+  cohort_id: string;
+  name: string;
+  code?: string;
+  color: string;
+  semester: string;
+  display_order: number;
+  status: AcademicUnitStatus;
+  is_archived?: boolean;
+  created_at?: string;
+  subjects?: SubjectWithUnits[];
+  modules_count?: number;
+  lessons_count?: number;
+}
+
 export interface Subject {
   id: string;
   cohort_id: string;
+  academic_unit_id?: string | null;
+  is_independent?: boolean;
   name: string;
   code?: string;
   color: string;
@@ -82,6 +108,9 @@ export interface Lesson {
   difficulty: LessonDifficulty;
   estimated_duration_min: number;
   revision_target: number;
+  description?: string;
+  source_file_ref?: string;
+  is_available?: boolean;
   notes?: string;
   is_archived?: boolean;
   created_at?: string;
@@ -91,14 +120,19 @@ export interface Lesson {
 export interface Exam {
   id: string;
   cohort_id: string;
+  target_type?: ExamTargetType;
+  academic_unit_id?: string | null;
+  academic_unit_name?: string;
   subject_id?: string | null;
   subject_name?: string;
   subject_color?: string;
   title: string;
   exam_type: ExamType;
-  exam_date: string; // ISO string
+  exam_date: string | null; // ISO string or null if not yet scheduled (no invented date)
+  exam_time?: string | null;
   location?: string;
   coefficient: number;
+  notes?: string | null;
   is_archived?: boolean;
   created_at?: string;
   exam_subjects?: ExamSubject[];
@@ -158,17 +192,40 @@ export interface SubjectWithUnits extends Subject {
   units: UnitWithLessons[];
 }
 
+export interface AcademicWorkloadItem {
+  id: string;
+  title: string;
+  code: string;
+  type: 'unit' | 'independent_module';
+  status: 'in_progress' | 'not_started' | 'completed';
+  color: string;
+  totalLessons: number;
+  completedLessons: number;
+  inProgressLessons: number;
+  notStartedLessons: number;
+  remainingHours: number;
+  percentCompleted: number;
+  exam: Exam | null;
+  coveredModules?: { id: string; name: string; lessonsCount: number }[];
+}
+
 export interface CurriculumImportRow {
   subject_name: string;
   unit_name?: string;
   unit_title?: string;
+  subcategory?: string;
   lesson_title: string;
   difficulty?: string;
   estimated_minutes?: number | string;
   estimated_duration_min?: number | string;
   revision_target?: number | string;
+  order?: number | string;
   semester?: string;
   notes?: string;
+  description?: string;
+  source_file_ref?: string;
+  source_file?: string;
+  is_available?: boolean | string;
 }
 
 export interface ExamImportRow {

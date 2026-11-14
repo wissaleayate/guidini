@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/context/auth-context';
 import {
   Menu,
@@ -9,6 +11,8 @@ import {
   ShieldCheck,
   UserCheck,
   Database,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -16,7 +20,13 @@ interface HeaderProps {
 }
 
 export function Header({ onOpenMobileMenu }: HeaderProps) {
-  const { role, switchRole, isConfigured } = useAuth();
+  const router = useRouter();
+  const { user, role, actualRole, switchRole, signOut, isConfigured } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/auth/login');
+  };
 
   return (
     <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs">
@@ -66,6 +76,9 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
                   DFGSM 2 Médecine
                 </span>
+                <span className="hidden lg:inline text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  Unité 01 : Cardiovasculo-Pulmonaire
+                </span>
               </div>
               <p className="text-xs text-slate-500">
                 Année Universitaire 2026–2027 • Plateforme de Cohorte
@@ -73,7 +86,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
             </div>
           </div>
 
-          {/* Right: Actions, Role Indicator & Status */}
+          {/* Right: Actions, User Identity & Sign Out */}
           <div className="flex items-center gap-3">
             {/* Supabase status badge */}
             <div
@@ -87,30 +100,64 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
               <span>{isConfigured ? 'Supabase Connecté' : 'Données Démo'}</span>
             </div>
 
-            {/* Role indicator pill */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800">
-              {role === 'admin' ? (
-                <>
-                  <ShieldCheck className="w-4 h-4 text-teal-600" />
-                  <span>Délégué Admin</span>
-                </>
-              ) : (
-                <>
-                  <UserCheck className="w-4 h-4 text-teal-600" />
-                  <span>Étudiant</span>
-                </>
-              )}
-            </div>
+            {user ? (
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Role indicator pill */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800">
+                  {role === 'admin' ? (
+                    <>
+                      <ShieldCheck className="w-4 h-4 text-teal-600" />
+                      <span className="hidden sm:inline">Délégué Admin</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-4 h-4 text-teal-600" />
+                      <span className="hidden sm:inline">Étudiant</span>
+                    </>
+                  )}
+                </div>
 
-            {/* Quick action: login or switch view */}
-            <div className="hidden lg:flex items-center">
-              <button
-                onClick={() => switchRole(role === 'admin' ? 'student' : 'admin')}
-                className="text-xs font-medium text-slate-500 hover:text-teal-700 hover:underline px-2"
-              >
-                Passer en vue {role === 'admin' ? 'Étudiant' : 'Délégué Admin'}
-              </button>
-            </div>
+                {/* User info on desktop */}
+                <div className="hidden xl:flex flex-col text-right">
+                  <span className="text-xs font-bold text-slate-900 leading-tight truncate max-w-[140px]">
+                    {user.full_name || 'Utilisateur'}
+                  </span>
+                  <span className="text-[11px] text-slate-500 truncate max-w-[140px]">
+                    {user.email}
+                  </span>
+                </div>
+
+                {/* Admin-only preview switch */}
+                {actualRole === 'admin' && (
+                  <button
+                    onClick={() => switchRole(role === 'admin' ? 'student' : 'admin')}
+                    className="hidden lg:inline-flex text-xs font-medium text-slate-500 hover:text-teal-700 hover:underline px-2"
+                  >
+                    Vue {role === 'admin' ? 'Étudiant' : 'Admin'}
+                  </button>
+                )}
+
+                {/* Sign Out Button */}
+                <button
+                  onClick={handleSignOut}
+                  title="Se déconnecter"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 border border-slate-200 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Déconnexion</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/auth/login"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Connexion</span>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>

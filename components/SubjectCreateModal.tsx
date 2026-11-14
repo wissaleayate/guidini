@@ -1,14 +1,22 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Save, Sparkles } from 'lucide-react';
-import { Subject } from '@/lib/types/database';
+import { X, Plus, Save, Sparkles, Layers } from 'lucide-react';
+import { Subject, AcademicUnit } from '@/lib/types/database';
 
 interface SubjectCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialSubject?: Subject | null;
-  onSave: (name: string, code: string, color: string, semester: string) => Promise<void>;
+  academicUnits?: AcademicUnit[];
+  onSave: (
+    name: string,
+    code: string,
+    color: string,
+    semester: string,
+    academicUnitId?: string | null,
+    isIndependent?: boolean
+  ) => Promise<void>;
 }
 
 const PRESET_COLORS = [
@@ -22,11 +30,18 @@ const PRESET_COLORS = [
   { name: 'Gris Ardoise', hex: '#475569' },
 ];
 
-export function SubjectCreateModal({ isOpen, onClose, initialSubject, onSave }: SubjectCreateModalProps) {
+export function SubjectCreateModal({
+  isOpen,
+  onClose,
+  initialSubject,
+  academicUnits = [],
+  onSave,
+}: SubjectCreateModalProps) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0].hex);
   const [semester, setSemester] = useState('S1');
+  const [selectedUnitId, setSelectedUnitId] = useState<string>('independent');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -35,13 +50,19 @@ export function SubjectCreateModal({ isOpen, onClose, initialSubject, onSave }: 
       setCode(initialSubject.code || '');
       setColor(initialSubject.color || PRESET_COLORS[0].hex);
       setSemester(initialSubject.semester || 'S1');
+      if (initialSubject.is_independent || !initialSubject.academic_unit_id) {
+        setSelectedUnitId('independent');
+      } else {
+        setSelectedUnitId(initialSubject.academic_unit_id);
+      }
     } else {
       setName('');
       setCode('');
       setColor(PRESET_COLORS[0].hex);
       setSemester('S1');
+      setSelectedUnitId(academicUnits[0]?.id || 'independent');
     }
-  }, [initialSubject, isOpen]);
+  }, [initialSubject, isOpen, academicUnits]);
 
   if (!isOpen) return null;
 
@@ -51,7 +72,10 @@ export function SubjectCreateModal({ isOpen, onClose, initialSubject, onSave }: 
 
     try {
       setIsSubmitting(true);
-      await onSave(name.trim(), code.trim(), color, semester);
+      const isIndependent = selectedUnitId === 'independent';
+      const academicUnitId = isIndependent ? null : selectedUnitId;
+
+      await onSave(name.trim(), code.trim(), color, semester, academicUnitId, isIndependent);
       setName('');
       setCode('');
       onClose();
@@ -100,6 +124,36 @@ export function SubjectCreateModal({ isOpen, onClose, initialSubject, onSave }: 
               placeholder="Ex: Hépato-Gastro-Entérologie"
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-teal-600" />
+              Organisation Académique
+            </label>
+            <select
+              value={selectedUnitId}
+              onChange={(e) => setSelectedUnitId(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-white font-medium"
+            >
+              <optgroup label="Grandes Unités Pédagogiques">
+                {academicUnits.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.code})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Discipline Autonome">
+                <option value="independent">
+                  ⭐ Module Indépendant Transversal (Immunologie, Microbiologie, Pharmacologie, Parasitologie)
+                </option>
+              </optgroup>
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              {selectedUnitId === 'independent'
+                ? 'Ce module aura son propre contrôle indépendant et ne sera pas rattaché à une des 4 unités.'
+                : 'Ce module fera partie intégrante de cette grande unité et de son contrôle semestriel unique.'}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

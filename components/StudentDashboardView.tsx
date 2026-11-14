@@ -7,6 +7,7 @@ import {
   Exam,
   StudySession,
   Cohort,
+  AcademicUnit,
 } from '@/lib/types/database';
 import { useAuth } from '@/lib/context/auth-context';
 import { CohortService } from '@/lib/services/cohort-service';
@@ -24,12 +25,16 @@ import {
   Sparkles,
   AlertTriangle,
   History,
+  Bookmark,
+  Compass,
+  ChevronRight,
 } from 'lucide-react';
 
 interface StudentDashboardViewProps {
   initialSubjects: SubjectWithUnits[];
   initialExams: Exam[];
   initialSessions: StudySession[];
+  academicUnits?: AcademicUnit[];
   cohort: Cohort;
   examsLastUpdated: string;
 }
@@ -38,6 +43,7 @@ export function StudentDashboardView({
   initialSubjects,
   initialExams,
   initialSessions,
+  academicUnits = [],
   cohort,
   examsLastUpdated,
 }: StudentDashboardViewProps) {
@@ -45,6 +51,7 @@ export function StudentDashboardView({
   const [subjects, setSubjects] = useState<SubjectWithUnits[]>(initialSubjects);
   const [exams, setExams] = useState<Exam[]>(initialExams);
   const [sessions, setSessions] = useState<StudySession[]>(initialSessions);
+  const [unitsList, setUnitsList] = useState<AcademicUnit[]>(academicUnits);
   const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -55,14 +62,16 @@ export function StudentDashboardView({
 
   const reloadData = async () => {
     const studentId = user?.id || 'demo-student-id';
-    const [sub, ex, rev] = await Promise.all([
+    const [sub, ex, rev, acUnits] = await Promise.all([
       CohortService.getCurriculumTree(studentId),
       CohortService.getExams(),
       CohortService.getStudentRevisionSessions(studentId),
+      CohortService.getAcademicUnits(),
     ]);
     setSubjects(sub);
     setExams(ex);
     setSessions(rev);
+    setUnitsList(acUnits);
   };
 
   // Handle saving revision from global modal
@@ -87,15 +96,16 @@ export function StudentDashboardView({
       await reloadData();
       showFeedback('success', 'Séance de révision enregistrée avec succès !');
     } catch (err: any) {
-      showFeedback('error', err?.message || 'Erreur lors de l\'enregistrement');
+      showFeedback('error', err?.message || "Erreur lors de l'enregistrement");
     }
   };
 
-  // Compute curriculum metrics
+  // 1. COMPUTE OVERALL METRICS
   let totalLessons = 0;
   let completedCount = 0;
   let inProgressCount = 0;
   let needsRevisionCount = 0;
+  let notStartedCount = 0;
   let remainingMinutes = 0;
 
   subjects.forEach((s) => {
@@ -113,6 +123,7 @@ export function StudentDashboardView({
           needsRevisionCount++;
           remainingMinutes += duration * 0.7;
         } else {
+          notStartedCount++;
           remainingMinutes += duration;
         }
       });
@@ -127,20 +138,142 @@ export function StudentDashboardView({
   const totalRevisionMinutes = sessions.reduce((acc, s) => acc + s.duration_min, 0);
   const totalRevisionHours = (totalRevisionMinutes / 60).toFixed(1);
 
-  // Next upcoming exam
+  // 2. COMPUTE SEPARATED WORKLOAD (SECTION G: CATCH-UP RADAR)
+  // A. Four Main Academic Units
+  const unitsData = useMemo(() => {
+    const list = unitsList.length > 0 ? unitsList : [
+      { id: 'unit-cardio-pulm-01', name: 'Unité 01 – Cardiovasculo-Pulmonaire', code: 'UE-01', color: '#0d9488', status: 'in_progress' },
+      { id: 'unit-neuro-hem-02', name: 'Unité 02 – Neuro / Hémato / Locomoteur', code: 'UE-02', color: '#6366f1', status: 'not_started' },
+      { id: 'unit-endo-uro-03', name: 'Unité 03 – Endocrino / Uro-génital', code: 'UE-03', color: '#f59e0b', status: 'not_started' },
+      { id: 'unit-gastro-hem-04', name: 'Unité 04 – Gastro / Hémato', code: 'UE-04', color: '#ef4444', status: 'not_started' },
+    ];
+
+    return list.map((u) => {
+      const childSubjects = subjects.filter((s) => s.academic_unit_id === u.id);
+      let uTotal = 0;
+      let uCompleted = 0;
+      let uInProgress = 0;
+      let uNotStarted = 0;
+      let uRemainingMin = 0;
+
+      const modulesInfo = childSubjects.map((s) => {
+        let sTotal = 0;
+        let sComp = 0;
+        s.units.forEach((un) => {
+          un.lessons.forEach((l) => {
+            sTotal++;
+            uTotal++;
+            const st = l.progress?.status || 'not_started';
+            const dur = l.estimated_duration_min || 60;
+            if (st === 'completed') {
+              sComp++;
+              uCompleted++;
+            } else if (st === 'in_progress') {
+              uInProgress++;
+              uRemainingMin += dur * 0.5;
+            } else if (st === 'needs_revision') {
+              uInProgress++;
+              uRemainingMin += dur * 0.7;
+            } else {
+              uNotStarted++;
+              uRemainingMin += dur;
+            }
+          });
+        });
+        return {
+          id: s.id,
+          name: s.name,
+          color: s.color,
+          code: s.code,
+          lessonsCount: sTotal,
+          completedCount: sComp,
+        };
+      });
+
+      const exam = exams.find(
+        (e) =>
+          e.academic_unit_id === u.id ||
+          (e.target_type === 'unit' &&
+            (e.title.toLowerCase().includes(u.code?.toLowerCase() || '') ||
+              e.title.toLowerCase().includes(u.name.toLowerCase())))
+      ) || null;
+
+      const pct = uTotal > 0 ? Math.round((uCompleted / uTotal) * 100) : 0;
+
+      return {
+        unit: u,
+        totalLessons: uTotal,
+        completedLessons: uCompleted,
+        inProgressLessons: uInProgress,
+        notStartedLessons: uNotStarted,
+        remainingHours: Math.round(uRemainingMin / 60),
+        percent: pct,
+        modules: modulesInfo,
+        exam,
+      };
+    });
+  }, [unitsList, subjects, exams]);
+
+  // B. Four Independent Modules (Never mixed into any main unit)
+  const independentData = useMemo(() => {
+    const indSubjects = subjects.filter((s) => s.is_independent || !s.academic_unit_id);
+
+    return indSubjects.map((s) => {
+      let sTotal = 0;
+      let sCompleted = 0;
+      let sInProgress = 0;
+      let sNotStarted = 0;
+      let sRemainingMin = 0;
+
+      s.units.forEach((un) => {
+        un.lessons.forEach((l) => {
+          sTotal++;
+          const st = l.progress?.status || 'not_started';
+          const dur = l.estimated_duration_min || 60;
+          if (st === 'completed') {
+            sCompleted++;
+          } else if (st === 'in_progress') {
+            sInProgress++;
+            sRemainingMin += dur * 0.5;
+          } else if (st === 'needs_revision') {
+            sInProgress++;
+            sRemainingMin += dur * 0.7;
+          } else {
+            sNotStarted++;
+            sRemainingMin += dur;
+          }
+        });
+      });
+
+      const exam = exams.find(
+        (e) =>
+          e.subject_id === s.id ||
+          (e.target_type === 'independent_module' &&
+            e.title.toLowerCase().includes(s.name.toLowerCase()))
+      ) || null;
+
+      const pct = sTotal > 0 ? Math.round((sCompleted / sTotal) * 100) : 0;
+
+      return {
+        subject: s,
+        totalLessons: sTotal,
+        completedLessons: sCompleted,
+        inProgressLessons: sInProgress,
+        notStartedLessons: sNotStarted,
+        remainingHours: Math.round(sRemainingMin / 60),
+        percent: pct,
+        exam,
+      };
+    });
+  }, [subjects, exams]);
+
   const now = new Date().getTime();
-  const upcomingExams = useMemo(() => {
-    return exams.filter((e) => new Date(e.exam_date).getTime() >= now - 24 * 60 * 60 * 1000);
-  }, [exams, now]);
-
-  const nextExam = upcomingExams[0] || null;
-
-  const getDaysRemaining = (dateStr: string) => {
+  const getDaysRemaining = (dateStr: string | null | undefined) => {
+    if (!dateStr) return null;
     const target = new Date(dateStr).getTime();
     return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
   };
 
-  // Format last updated date
   const formattedExamUpdate = useMemo(() => {
     try {
       const dt = new Date(examsLastUpdated);
@@ -178,66 +311,71 @@ export function StudentDashboardView({
       <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-slate-950 rounded-3xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold border border-teal-400/30">
-              <Sparkles className="w-3.5 h-3.5" />
-              Espace Personnel d'Étude • Guidini
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold border border-teal-400/30 flex-wrap">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                Promotion {cohort.name || 'DFGSM 2 Médecine'}
+              </span>
+              <span>•</span>
+              <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                8 Contrôles Académiques (4 Unités + 4 Modules Indépendants)
+              </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Bonjour, {user?.full_name || 'Étudiant en Médecine'} 👋
             </h1>
             <p className="text-xs sm:text-sm text-teal-100/90 max-w-2xl leading-relaxed">
-              {cohort.study_year || 'DFGSM 2 Médecine'} • {cohort.name || 'Promotion 2026–2027'} • {cohort.semester || 'Semestre 1'}.
-              Retrouvez l'avancement officiel du programme et vos révisions personnelles.
+              {cohort.study_year || 'Deuxième Année'} • {cohort.academic_year || '2026–2027'} • {cohort.semester || 'Semestre 1'}.
+              Suivez l'avancement de vos 4 unités intégrées et de vos 4 modules indépendants en toute clarté.
             </p>
           </div>
 
-          <button
-            onClick={() => setIsRevisionModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm text-slate-950 bg-teal-400 hover:bg-teal-300 active:bg-teal-500 shadow-lg shadow-teal-500/25 transition-transform hover:scale-102 self-start md:self-auto shrink-0"
-          >
-            <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
-            Enregistrer une révision
-          </button>
+          <div className="flex items-center gap-3 self-start md:self-auto flex-wrap">
+            <button
+              onClick={() => setIsRevisionModalOpen(true)}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm text-slate-950 bg-teal-400 hover:bg-teal-300 active:bg-teal-500 shadow-lg shadow-teal-500/25 transition-transform hover:scale-102 shrink-0"
+            >
+              <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
+              Enregistrer une révision
+            </button>
+          </div>
         </div>
       </div>
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Next Exam Card */}
+        {/* Total Controls Status Card */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-teal-600" />
-              Prochain Contrôle
+              Contrôles du Régime
             </span>
-            {nextExam && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                {getDaysRemaining(nextExam.exam_date) <= 0
-                  ? "Aujourd'hui"
-                  : `Dans ${getDaysRemaining(nextExam.exam_date)} j`}
-              </span>
-            )}
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+              8 contrôles
+            </span>
           </div>
 
-          {nextExam ? (
-            <div className="space-y-1.5">
-              <h3 className="font-bold text-slate-900 text-sm leading-snug line-clamp-2" title={nextExam.title}>
-                {nextExam.title}
-              </h3>
-              <div className="text-xs text-slate-500 flex items-center gap-2">
-                <span>📅 {new Date(nextExam.exam_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
-                <span>•</span>
-                <span>Coeff {nextExam.coefficient}</span>
-              </div>
-              <span className="inline-block text-[11px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                {nextExam.subject_name || 'Tronc Commun'}
+          <div className="space-y-1.5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-extrabold text-slate-900 leading-none">
+                {exams.length}
+              </span>
+              <span className="text-xs text-slate-500 font-semibold">
+                épreuves au total
               </span>
             </div>
-          ) : (
-            <div className="text-xs text-slate-400 italic py-2">
-              Aucune épreuve planifiée prochainement.
+            <div className="text-xs text-slate-500 space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span>• 4 Contrôles d'Unités :</span>
+                <span className="font-bold text-teal-700">4 / 4</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>• 4 Modules Indépendants :</span>
+                <span className="font-bold text-purple-700">4 / 4</span>
+              </div>
             </div>
-          )}
+          </div>
 
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
             <span className="text-slate-400" title={`Synchronisé le ${examsLastUpdated}`}>
@@ -247,7 +385,7 @@ export function StudentDashboardView({
               href="/student/exams"
               className="font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1"
             >
-              Calendrier ({exams.length})
+              Calendrier complet
               <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
@@ -293,24 +431,29 @@ export function StudentDashboardView({
                 title={`À réviser : ${needsRevisionCount}`}
               />
             </div>
+            <p className="text-[10px] text-slate-400 italic">
+              Avancement calculé sur les cours actuellement disponibles.
+            </p>
           </div>
 
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 flex-wrap gap-1">
             <span>{inProgressCount} en cours</span>
             <span>•</span>
-            <span className="text-amber-700 font-semibold">{needsRevisionCount} à réviser</span>
+            <span className="text-amber-700 font-semibold">{needsRevisionCount} à revoir</span>
+            <span>•</span>
+            <span>{notStartedCount} non commencés</span>
           </div>
         </div>
 
-        {/* Remaining Lessons Card */}
+        {/* Workload Remaining Hours Card */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <BookOpen className="w-3.5 h-3.5 text-teal-600" />
-              Cours Restants
+              Charge Restante
             </span>
             <span className="text-xs font-semibold text-slate-500">
-              {remainingLessons} à valider
+              {remainingLessons} cours à valider
             </span>
           </div>
 
@@ -324,7 +467,7 @@ export function StudentDashboardView({
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-tight">
-              Basé sur les durées préconisées par le programme officiel.
+              Unité 01 en cours ({unitsData[0]?.remainingHours || 0}h restantes)
             </p>
           </div>
 
@@ -377,216 +520,432 @@ export function StudentDashboardView({
         </div>
       </div>
 
-      {/* Main Grid: Subjects Progress (Left) + Recent Sessions & Schedule (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Subjects breakdown */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-teal-600" />
-              <h2 className="text-lg font-bold text-slate-900">
-                Modules Médicaux du Semestre
-              </h2>
+      {/* =========================================================================
+          SECTION G : CATCH-UP RADAR & CHARGE D'ÉTUDE HERMÉTIQUE
+         ========================================================================= */}
+      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-700">
+              <Compass className="w-5 h-5" />
             </div>
-            <span className="text-xs text-slate-400 font-medium">
-              {subjects.length} modules
-            </span>
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900">
+                Radar de Rattrapage & Charge d'Étude Séparée
+              </h2>
+              <p className="text-xs text-slate-500">
+                Calcul indépendant de la charge pour chaque unité et chaque module autonome (aucune interpénétration).
+              </p>
+            </div>
           </div>
 
-          {/* Subjects Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {subjects.map((sub) => {
-              let subLessons = 0;
-              let subCompleted = 0;
-              let subMinutes = 0;
-
-              sub.units.forEach((u) => {
-                u.lessons.forEach((l) => {
-                  subLessons++;
-                  subMinutes += l.estimated_duration_min || 60;
-                  if (l.progress?.status === 'completed') subCompleted++;
-                });
-              });
-
-              const subPercent = subLessons > 0 ? Math.round((subCompleted / subLessons) * 100) : 0;
-
-              return (
-                <Link
-                  key={sub.id}
-                  href={`/student/subjects/${sub.id}`}
-                  className="group bg-white rounded-3xl p-5 border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all flex flex-col justify-between space-y-4"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
-                        {sub.code || 'MED'}
-                      </span>
-                      <span className="text-xs font-bold text-slate-700">
-                        {subPercent}%
-                      </span>
-                    </div>
-
-                    <h3 className="font-bold text-slate-900 text-base group-hover:text-teal-700 transition-colors leading-snug">
-                      {sub.name}
-                    </h3>
-
-                    <div className="text-xs text-slate-500 flex items-center gap-2">
-                      <span>{sub.units.length} unités</span>
-                      <span>•</span>
-                      <span>{subLessons} cours</span>
-                      <span>•</span>
-                      <span>{Math.round(subMinutes / 60)}h</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{
-                          width: `${subPercent}%`,
-                          backgroundColor: sub.color || '#0d9488',
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 group-hover:text-teal-600 transition-colors">
-                      <span>{subCompleted} / {subLessons} validés</span>
-                      <span className="flex items-center gap-0.5">
-                        Consulter <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
+              Strictement hermétique
+            </span>
           </div>
         </div>
 
-        {/* Right Column: Recent Sessions + Shared Calendar */}
-        <div className="space-y-6">
-          {/* Recent Revision Sessions Card */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-4">
+        {/* Catch-Up Comparison Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Workload: 4 Main Units */}
+          <div className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-teal-600" />
-                <h3 className="font-bold text-slate-900 text-sm">
-                  Dernières Révisions
+                <Layers className="w-4 h-4 text-teal-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Charge des 4 Grandes Unités
                 </h3>
               </div>
-              <Link
-                href="/student/progress"
-                className="text-xs font-semibold text-teal-600 hover:text-teal-700"
-              >
-                Voir tout
-              </Link>
-            </div>
-
-            {sessions.length === 0 ? (
-              <div className="p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto">
-                  <Flame className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="font-bold text-slate-800 text-xs">
-                    Aucune révision enregistrée
-                  </h4>
-                  <p className="text-[11px] text-slate-500 leading-tight">
-                    Commencez par consigner votre première session de travail.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsRevisionModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-xs transition-colors"
-                >
-                  Lancer ma première séance
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {sessions.slice(0, 4).map((s) => (
-                  <div
-                    key={s.id}
-                    className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100 flex items-start justify-between gap-3 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200 truncate">
-                          {s.subject_name}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {new Date(s.session_date).toLocaleDateString('fr-FR', {
-                            day: 'numeric',
-                            month: 'short',
-                          })}
-                        </span>
-                      </div>
-                      <h4 className="font-semibold text-xs text-slate-900 truncate" title={s.lesson_title}>
-                        {s.lesson_title}
-                      </h4>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                        <span className="font-medium text-slate-600 truncate">{s.session_type}</span>
-                        <span>•</span>
-                        <span>{s.duration_min} min</span>
-                        <span>•</span>
-                        <span className="text-amber-600 font-bold">{s.confidence_rating}★</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Upcoming Exams Calendar Card */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-teal-600" />
-                <h3 className="font-bold text-slate-900 text-sm">
-                  Calendrier de Promotion
-                </h3>
-              </div>
-              <Link
-                href="/student/exams"
-                className="text-xs font-semibold text-teal-600 hover:text-teal-700"
-              >
-                Tout voir
-              </Link>
+              <span className="text-[11px] font-semibold text-slate-500">
+                {unitsData.reduce((acc, u) => acc + u.remainingHours, 0)}h restantes
+              </span>
             </div>
 
             <div className="space-y-3">
-              {upcomingExams.slice(0, 3).map((ex) => (
+              {unitsData.map((item) => (
                 <div
-                  key={ex.id}
-                  className="p-3 bg-teal-50/40 rounded-2xl border border-teal-100 flex items-start justify-between gap-3"
+                  key={item.unit.id}
+                  className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2 hover:border-teal-300 transition-colors"
                 >
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md">
-                      {ex.exam_type}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900">
+                      {item.unit.name}
                     </span>
-                    <h4 className="font-bold text-xs text-slate-900 leading-snug">
-                      {ex.title}
-                    </h4>
-                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>{new Date(ex.exam_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</span>
-                      {ex.location && (
-                        <>
-                          <span>•</span>
-                          <span>{ex.location}</span>
-                        </>
-                      )}
-                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        item.unit.status === 'in_progress'
+                          ? 'bg-amber-50 text-amber-900 border border-amber-300'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {item.unit.status === 'in_progress' ? 'En cours' : 'À venir'}
+                    </span>
                   </div>
-                  <span className="text-xs font-bold text-teal-700 bg-white px-2 py-1 rounded-xl border border-teal-200 shrink-0">
-                    Coeff {ex.coefficient}
-                  </span>
+
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      {item.completedLessons} / {item.totalLessons} cours validés
+                    </span>
+                    <span className="font-semibold text-slate-700">
+                      {item.percent}% • ~{item.remainingHours}h d'étude
+                    </span>
+                  </div>
+
+                  {/* Micro Progress Bar */}
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-teal-500 transition-all"
+                      style={{ width: `${item.percent}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Workload: 4 Independent Modules */}
+          <div className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bookmark className="w-4 h-4 text-purple-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Charge des 4 Modules Indépendants
+                </h3>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-500">
+                Disciplines autonomes
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {independentData.map((item) => (
+                <div
+                  key={item.subject.id}
+                  className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2 hover:border-purple-300 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: item.subject.color || '#8b5cf6' }}
+                      />
+                      <span className="text-xs font-bold text-slate-900">
+                        {item.subject.name}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
+                      {item.subject.code || 'MOD'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      {item.totalLessons > 0
+                        ? `${item.completedLessons} / ${item.totalLessons} cours validés`
+                        : 'Programme en attente de cours'}
+                    </span>
+                    <span className="font-semibold text-slate-700">
+                      {item.percent}% • ~{item.remainingHours}h
+                    </span>
+                  </div>
+
+                  {/* Micro Progress Bar */}
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-purple-500 transition-all"
+                      style={{ width: `${item.percent}%` }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
+      </div>
+
+      {/* =========================================================================
+          SECTION F.1 : CONTRÔLES DES GRANDES UNITÉS (UNIT CONTROLS)
+         ========================================================================= */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="w-5 h-5 text-teal-600" />
+            <h2 className="text-lg font-extrabold text-slate-900">
+              1. Contrôles des Unités Pédagogiques (4 Unités Intégrées)
+            </h2>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">
+            1 contrôle semestriel par unité
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {unitsData.map((item) => {
+            const hasExamDate = Boolean(item.exam?.exam_date);
+            const daysLeft = getDaysRemaining(item.exam?.exam_date);
+
+            return (
+              <div
+                key={item.unit.id}
+                className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col justify-between space-y-5 hover:border-teal-400 hover:shadow-md transition-all relative overflow-hidden"
+              >
+                {/* Top strip */}
+                <div
+                  className="absolute top-0 left-0 right-0 h-2"
+                  style={{ backgroundColor: item.unit.color || '#0d9488' }}
+                />
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200">
+                      {item.unit.code || 'UE'} • Contrôle Semestriel
+                    </span>
+                    {hasExamDate ? (
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
+                        {daysLeft === 0 ? "Aujourd'hui" : `Dans ${daysLeft} j`}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                        Date à définir
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-base font-extrabold text-slate-900 leading-snug">
+                    {item.exam?.title || `Contrôle Semestriel – ${item.unit.name}`}
+                  </h3>
+
+                  {/* Modules Covered List */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                      <span>Modules & cours couverts ({item.totalLessons} cours) :</span>
+                      <span className="font-bold text-teal-700">{item.percent}%</span>
+                    </div>
+
+                    {item.modules.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.modules.map((m) => (
+                          <span
+                            key={m.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200"
+                          >
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: m.color || '#0d9488' }}
+                            />
+                            {m.name} ({m.lessonsCount})
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-400 italic">
+                        Programme en attente d'ouverture
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Date & Location Details */}
+                  <div className="text-xs text-slate-500 space-y-1 pt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      <span>
+                        {hasExamDate ? (
+                          new Date(item.exam!.exam_date!).toLocaleDateString('fr-FR', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long',
+                          })
+                        ) : (
+                          <span className="text-amber-800 font-medium">
+                            Calendrier non fixé par l'administration
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {item.exam?.location && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{item.exam.location} • Coeff {item.exam.coefficient}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Remaining Workload Bar */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-600">
+                    Charge restante : ~{item.remainingHours}h d'étude
+                  </span>
+                  <Link
+                    href={`/student/exams`}
+                    className="font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1"
+                  >
+                    Détails <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* =========================================================================
+          SECTION F.2 : CONTRÔLES DES MODULES INDÉPENDANTS (INDEPENDENT MODULES)
+         ========================================================================= */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bookmark className="w-5 h-5 text-purple-600" />
+            <h2 className="text-lg font-extrabold text-slate-900">
+              2. Contrôles des Modules Indépendants (Disciplines Autonomes)
+            </h2>
+          </div>
+          <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
+            4 contrôles autonomes
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {independentData.map((item) => {
+            const hasExamDate = Boolean(item.exam?.exam_date);
+            const daysLeft = getDaysRemaining(item.exam?.exam_date);
+
+            return (
+              <div
+                key={item.subject.id}
+                className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-purple-400 hover:shadow-md transition-all relative overflow-hidden"
+              >
+                {/* Top strip */}
+                <div
+                  className="absolute top-0 left-0 right-0 h-1.5"
+                  style={{ backgroundColor: item.subject.color || '#8b5cf6' }}
+                />
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
+                      {item.subject.code || 'MOD'}
+                    </span>
+                    {hasExamDate ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200">
+                        {daysLeft === 0 ? "Aujourd'hui" : `J-${daysLeft}`}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                        À définir
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="font-extrabold text-slate-900 text-base leading-snug">
+                    {item.subject.name}
+                  </h3>
+
+                  <p className="text-xs font-semibold text-purple-900">
+                    {item.exam?.title || `Contrôle – ${item.subject.name}`}
+                  </p>
+
+                  <div className="text-xs text-slate-500 space-y-1 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span>Cours répertoriés :</span>
+                      <span className="font-bold text-slate-800">{item.totalLessons}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Charge estimée :</span>
+                      <span className="font-bold text-slate-800">~{item.remainingHours}h</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Coefficient :</span>
+                      <span className="font-bold text-slate-800">{item.exam?.coefficient || 1.5}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                  <Link
+                    href={`/student/subjects/${item.subject.id}`}
+                    className="font-bold text-purple-700 hover:text-purple-800 flex items-center gap-1"
+                  >
+                    Accéder au module <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* =========================================================================
+          RECENT REVISION SESSIONS LOGS
+         ========================================================================= */}
+      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-teal-600" />
+            <h3 className="font-bold text-slate-900 text-sm">
+              Dernières Révisions Consignées
+            </h3>
+          </div>
+          <Link
+            href="/student/progress"
+            className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1"
+          >
+            Historique complet ({sessions.length}) <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {sessions.length === 0 ? (
+          <div className="p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto">
+              <Flame className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-bold text-slate-800 text-xs">
+                Aucune révision enregistrée
+              </h4>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Consignez votre première séance de travail pour débuter votre suivi personnalisé.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsRevisionModalOpen(true)}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-xs transition-colors"
+            >
+              Enregistrer une première séance
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {sessions.slice(0, 4).map((s) => (
+              <div
+                key={s.id}
+                className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-100 flex flex-col justify-between space-y-2 hover:bg-slate-50 transition-colors"
+              >
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200 truncate max-w-[70%]">
+                      {s.subject_name}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(s.session_date).toLocaleDateString('fr-FR', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                  </div>
+                  <h4 className="font-semibold text-xs text-slate-900 truncate" title={s.lesson_title}>
+                    {s.lesson_title}
+                  </h4>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                  <span className="font-medium">{s.duration_min} min</span>
+                  <span className="text-amber-600 font-bold">{s.confidence_rating}★</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Global Revision Modal */}

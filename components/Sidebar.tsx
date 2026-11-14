@@ -16,6 +16,7 @@ import {
   Database,
   LayoutDashboard,
   Eye,
+  Users,
   X,
 } from 'lucide-react';
 
@@ -26,7 +27,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { role, switchRole, isConfigured } = useAuth();
+  const { role, actualRole, switchRole, isConfigured } = useAuth();
 
   const studentLinks = [
     { href: '/student', label: 'Tableau de Bord', icon: LayoutDashboard },
@@ -40,6 +41,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { href: '/admin/exams', label: 'Gestion des Examens', icon: Calendar },
     { href: '/admin/import', label: 'Import CSV / Excel', icon: FileSpreadsheet },
     { href: '/admin/cohort', label: 'Paramètres Cohorte', icon: Settings },
+    { href: '/admin/users', label: 'Gestion des Étudiants', icon: Users },
     { href: '/student', label: 'Aperçu Étudiant', icon: Eye },
   ];
 
@@ -131,36 +133,43 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </span>
         </div>
 
-        {/* Role Toggle */}
-        <div className="space-y-1">
-          <span className="text-[11px] font-semibold text-slate-400 px-1 block">
-            Changer de profil :
-          </span>
-          <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => switchRole('student')}
-              className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
-                role === 'student'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              Étudiant
-            </button>
-            <button
-              onClick={() => switchRole('admin')}
-              className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
-                role === 'admin'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Admin
-            </button>
+        {/* Role Toggle for Admin Preview only */}
+        {actualRole === 'admin' ? (
+          <div className="space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 px-1 block">
+              Aperçu Administrateur :
+            </span>
+            <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={() => switchRole('student')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                  role === 'student'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                Étudiant
+              </button>
+              <button
+                onClick={() => switchRole('admin')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+                  role === 'admin'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Admin
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-400">
+            <UserCheck className="w-3.5 h-3.5 text-teal-400" />
+            <span>Compte Étudiant • RLS Actif</span>
+          </div>
+        )}
       </div>
     </div>
   );

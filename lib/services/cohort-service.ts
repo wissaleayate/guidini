@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import {
   Cohort,
+  AcademicUnit,
   Subject,
   Unit,
   Lesson,
@@ -8,6 +9,7 @@ import {
   LessonProgress,
   StudySession,
   SubjectWithUnits,
+  AcademicWorkloadItem,
   CurriculumImportRow,
   ExamImportRow,
   LessonStatus,
@@ -15,11 +17,13 @@ import {
 } from '@/lib/types/database';
 import {
   INITIAL_COHORT,
+  INITIAL_ACADEMIC_UNITS,
   INITIAL_SUBJECTS,
   INITIAL_EXAMS,
   INITIAL_STUDENT_PROGRESS,
   INITIAL_REVISION_SESSIONS,
 } from '@/lib/data/sample-data';
+import { cleanLessonTitleAndSource } from '@/lib/services/import-parser';
 
 // Helper to prevent requests from hanging indefinitely
 function withTimeout<T = any>(promise: PromiseLike<T> | Promise<T>, ms = 4000): Promise<T> {
@@ -33,6 +37,7 @@ function withTimeout<T = any>(promise: PromiseLike<T> | Promise<T>, ms = 4000): 
 
 // In-memory / session store when Supabase keys are not set up yet
 let localCohort: Cohort = { ...INITIAL_COHORT };
+const localAcademicUnits: AcademicUnit[] = JSON.parse(JSON.stringify(INITIAL_ACADEMIC_UNITS));
 let localSubjects: SubjectWithUnits[] = JSON.parse(JSON.stringify(INITIAL_SUBJECTS));
 let localExams: Exam[] = JSON.parse(JSON.stringify(INITIAL_EXAMS));
 const localProgress: Record<string, LessonProgress> = JSON.parse(JSON.stringify(INITIAL_STUDENT_PROGRESS));
@@ -104,6 +109,103 @@ export class CohortService {
     }
     localCohort = { ...localCohort, ...updates, updated_at: new Date().toISOString() };
     return localCohort;
+  }
+
+  // =========================================================================
+  // ACADEMIC UNITS (Grandes Unités d'Enseignement Intégrées)
+  // =========================================================================
+
+  /**
+   * Fetch all 4 academic units for the cohort
+   */
+  static async getAcademicUnits(): Promise<AcademicUnit[]> {
+    const supabase = createClient();
+    if (supabase) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('academic_units')
+            .select('*')
+            .eq('is_archived', false)
+            .order('display_order', { ascending: true })
+        );
+        if (data && !error && data.length > 0) {
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getAcademicUnits error:', err);
+      }
+    }
+    return localAcademicUnits.sort((a, b) => a.display_order - b.display_order);
+  }
+
+  /**
+   * Update academic unit metadata or status (Admin only)
+   */
+  static async updateAcademicUnit(
+    unitId: string,
+    updates: Partial<AcademicUnit>
+  ): Promise<AcademicUnit> {
+    const supabase = createClient();
+    if (supabase) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('academic_units')
+            .update(updates)
+            .eq('id', unitId)
+            .select()
+            .single()
+        );
+        if (data && !error) {
+          const idx = localAcademicUnits.findIndex((u) => u.id === unitId);
+          if (idx !== -1) localAcademicUnits[idx] = { ...localAcademicUnits[idx], ...data };
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase updateAcademicUnit error:', err);
+      }
+    }
+    const idx = localAcademicUnits.findIndex((u) => u.id === unitId);
+    if (idx !== -1) {
+      localAcademicUnits[idx] = { ...localAcademicUnits[idx], ...updates };
+      return localAcademicUnits[idx];
+    }
+    throw new Error('Unité académique introuvable');
+  }
+
+  /**
+   * Create a new academic unit (Admin only)
+   */
+  static async createAcademicUnit(unitData: Partial<AcademicUnit>): Promise<AcademicUnit> {
+    const supabase = createClient();
+    const newUnit: AcademicUnit = {
+      id: unitData.id || `unit-${Date.now()}`,
+      cohort_id: localCohort.id,
+      name: unitData.name || 'Nouvelle Unité',
+      code: unitData.code || 'UE',
+      color: unitData.color || '#0d9488',
+      semester: unitData.semester || 'S1',
+      display_order: unitData.display_order || localAcademicUnits.length + 1,
+      status: unitData.status || 'not_started',
+    };
+
+    if (supabase) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase.from('academic_units').insert(newUnit).select().single()
+        );
+        if (data && !error) {
+          localAcademicUnits.push(data);
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase createAcademicUnit error:', err);
+      }
+    }
+
+    localAcademicUnits.push(newUnit);
+    return newUnit;
   }
 
   /**
@@ -235,7 +337,14 @@ export class CohortService {
   /**
    * Add a new subject (Admin only)
    */
-  static async createSubject(name: string, code: string, color: string, semester: string): Promise<Subject> {
+  static async createSubject(
+    name: string,
+    code: string,
+    color: string,
+    semester: string,
+    academicUnitId?: string | null,
+    isIndependent: boolean = false
+  ): Promise<Subject> {
     const supabase = createClient();
     const displayOrder = localSubjects.length + 1;
 
@@ -246,6 +355,8 @@ export class CohortService {
             .from('subjects')
             .insert({
               cohort_id: localCohort.id,
+              academic_unit_id: academicUnitId || null,
+              is_independent: isIndependent,
               name: name.trim(),
               code: code?.trim() || null,
               color: color || '#0d9488',
@@ -268,6 +379,8 @@ export class CohortService {
     const newSubject: SubjectWithUnits = {
       id: `sub-${Date.now()}`,
       cohort_id: localCohort.id,
+      academic_unit_id: academicUnitId || null,
+      is_independent: isIndependent,
       name: name.trim(),
       code: code?.trim(),
       color: color || '#0d9488',
@@ -284,7 +397,7 @@ export class CohortService {
    */
   static async updateSubject(
     subjectId: string,
-    updates: Partial<Pick<Subject, 'name' | 'code' | 'color' | 'semester' | 'display_order'>>
+    updates: Partial<Pick<Subject, 'name' | 'code' | 'color' | 'semester' | 'display_order' | 'academic_unit_id' | 'is_independent'>>
   ): Promise<void> {
     const supabase = createClient();
     if (supabase) {
@@ -494,9 +607,13 @@ export class CohortService {
     difficulty: LessonDifficulty,
     durationMin: number,
     revisionTarget: number = 3,
-    notes?: string
+    notes?: string,
+    description?: string,
+    sourceFileRef?: string,
+    isAvailable: boolean = true
   ): Promise<Lesson> {
     const supabase = createClient();
+    const { title: cleanTitle, sourceFile } = cleanLessonTitleAndSource(title, sourceFileRef);
 
     let displayOrder = 1;
     for (const sub of localSubjects) {
@@ -514,11 +631,14 @@ export class CohortService {
             .from('lessons')
             .insert({
               unit_id: unitId,
-              title: title.trim(),
+              title: cleanTitle.trim(),
               difficulty,
               estimated_duration_min: durationMin,
               revision_target: revisionTarget,
               notes: notes?.trim() || null,
+              description: description?.trim() || null,
+              source_file_ref: sourceFile || null,
+              is_available: isAvailable,
               display_order: displayOrder,
             })
             .select()
@@ -533,12 +653,15 @@ export class CohortService {
     const newLesson: Lesson = {
       id: `les-${Date.now()}`,
       unit_id: unitId,
-      title: title.trim(),
+      title: cleanTitle.trim(),
       display_order: displayOrder,
       difficulty,
       estimated_duration_min: durationMin,
       revision_target: revisionTarget,
       notes: notes?.trim(),
+      description: description?.trim(),
+      source_file_ref: sourceFile,
+      is_available: isAvailable,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -557,10 +680,25 @@ export class CohortService {
   /**
    * Update lesson details (Admin only).
    * Persists without altering student progress!
+   * Supports moving lessons between modules or subcategories by changing unit_id.
    */
   static async updateLesson(
     lessonId: string,
-    updates: Partial<Pick<Lesson, 'title' | 'difficulty' | 'estimated_duration_min' | 'revision_target' | 'notes' | 'display_order'>>
+    updates: Partial<
+      Pick<
+        Lesson,
+        | 'title'
+        | 'difficulty'
+        | 'estimated_duration_min'
+        | 'revision_target'
+        | 'notes'
+        | 'description'
+        | 'source_file_ref'
+        | 'is_available'
+        | 'display_order'
+        | 'unit_id'
+      >
+    >
   ): Promise<void> {
     const supabase = createClient();
     if (supabase) {
@@ -576,15 +714,49 @@ export class CohortService {
       }
     }
 
+    // In-memory update and moving between units if unit_id changed
+    let currentLesson: Lesson | null = null;
+    let currentUnit: Unit | null = null;
+
     for (const sub of localSubjects) {
       for (const u of sub.units) {
-        const les = u.lessons.find((l) => l.id === lessonId);
-        if (les) {
-          Object.assign(les, updates, { updated_at: new Date().toISOString() });
-          return;
+        const idx = u.lessons.findIndex((l) => l.id === lessonId);
+        if (idx !== -1) {
+          currentLesson = u.lessons[idx];
+          currentUnit = u;
+          if (updates.unit_id && updates.unit_id !== u.id) {
+            // Remove from old unit
+            u.lessons.splice(idx, 1);
+          }
+          break;
+        }
+      }
+      if (currentLesson) break;
+    }
+
+    if (currentLesson) {
+      Object.assign(currentLesson, updates, { updated_at: new Date().toISOString() });
+
+      // If moved to a new unit, insert into new unit
+      if (updates.unit_id && currentUnit && updates.unit_id !== currentUnit.id) {
+        for (const sub of localSubjects) {
+          const newUnit = sub.units.find((u) => u.id === updates.unit_id);
+          if (newUnit) {
+            currentLesson.unit_id = updates.unit_id;
+            currentLesson.display_order = newUnit.lessons.length + 1;
+            newUnit.lessons.push(currentLesson);
+            break;
+          }
         }
       }
     }
+  }
+
+  /**
+   * Quick toggle lesson availability (e.g. available vs temporarily unavailable)
+   */
+  static async toggleLessonAvailability(lessonId: string, isAvailable: boolean): Promise<void> {
+    await this.updateLesson(lessonId, { is_available: isAvailable });
   }
 
   /**
@@ -609,10 +781,37 @@ export class CohortService {
   }
 
   /**
-   * Delete a lesson (Admin only)
+   * Delete or archive a lesson (Admin only).
+   * If a student already has progress on this lesson, it archives the lesson
+   * instead of destroying student history!
    */
-  static async deleteLesson(lessonId: string): Promise<void> {
+  static async deleteLesson(lessonId: string, forceHardDelete: boolean = false): Promise<void> {
+    const studentCount = await this.checkLessonHasStudentProgress(lessonId);
     const supabase = createClient();
+
+    if (studentCount > 0 && !forceHardDelete) {
+      // Soft-archive to protect student progress
+      if (supabase) {
+        try {
+          await withTimeout(
+            supabase.from('lessons').update({ is_archived: true }).eq('id', lessonId)
+          );
+        } catch (err) {
+          console.warn('Supabase archiveLesson error:', err);
+        }
+      }
+
+      for (const sub of localSubjects) {
+        for (const u of sub.units) {
+          const l = u.lessons.find((item) => item.id === lessonId);
+          if (l) {
+            l.is_archived = true;
+          }
+        }
+      }
+      return;
+    }
+
     if (supabase) {
       try {
         await withTimeout(supabase.from('lessons').delete().eq('id', lessonId));
@@ -672,6 +871,20 @@ export class CohortService {
   // =========================================================================
 
   /**
+   * Sort exams safely handling nullable dates (dates non inventées)
+   */
+  static sortExams(exams: Exam[]): Exam[] {
+    return [...exams].sort((a, b) => {
+      if (a.exam_date && b.exam_date) {
+        return new Date(a.exam_date).getTime() - new Date(b.exam_date).getTime();
+      }
+      if (a.exam_date && !b.exam_date) return -1;
+      if (!a.exam_date && b.exam_date) return 1;
+      return a.title.localeCompare(b.title);
+    });
+  }
+
+  /**
    * Fetch all exams for the cohort with multiple subjects covered
    */
   static async getExams(): Promise<Exam[]> {
@@ -681,11 +894,11 @@ export class CohortService {
         const { data, error } = await withTimeout(
           supabase
             .from('exams')
-            .select('*, subjects(name, color), exam_subjects(subject_id, subjects(name, color))')
+            .select('*, academic_units(name, code, color), subjects(name, color), exam_subjects(subject_id, subjects(name, color))')
             .order('exam_date', { ascending: true })
         );
         if (data && !error && data.length > 0) {
-          return data.map((e: any) => {
+          const mapped = data.map((e: any) => {
             const coveredSubjects = (e.exam_subjects || [])
               .map((es: any) => es.subjects?.name)
               .filter(Boolean);
@@ -693,7 +906,7 @@ export class CohortService {
               .map((es: any) => es.subject_id)
               .filter(Boolean);
 
-            let subjectLabel = e.subjects?.name || 'Tronc Commun';
+            let subjectLabel = e.subjects?.name || e.academic_units?.name || 'Contrôle Médical';
             if (coveredSubjects.length > 1) {
               subjectLabel = coveredSubjects.join(' + ');
             } else if (coveredSubjects.length === 1) {
@@ -702,19 +915,20 @@ export class CohortService {
 
             return {
               ...e,
+              target_type: e.target_type || (e.academic_unit_id ? 'unit' : 'independent_module'),
+              academic_unit_name: e.academic_units?.name,
               subject_name: subjectLabel,
-              subject_color: e.subjects?.color || '#0d9488',
+              subject_color: e.subjects?.color || e.academic_units?.color || '#0d9488',
               subject_ids: coveredIds.length > 0 ? coveredIds : (e.subject_id ? [e.subject_id] : []),
             };
           });
+          return this.sortExams(mapped);
         }
       } catch (err) {
         console.warn('Supabase getExams error:', err);
       }
     }
-    return localExams.sort(
-      (a, b) => new Date(a.exam_date).getTime() - new Date(b.exam_date).getTime()
-    );
+    return this.sortExams(localExams);
   }
 
   /**
@@ -728,7 +942,7 @@ export class CohortService {
   }> {
     const exams = await this.getExams();
     const now = new Date().getTime();
-    const upcoming = exams.filter((e) => new Date(e.exam_date).getTime() >= now);
+    const upcoming = exams.filter((e) => e.exam_date && new Date(e.exam_date).getTime() >= now);
     const nextExam = upcoming[0] || null;
 
     let latestUpdate = '';
@@ -764,12 +978,16 @@ export class CohortService {
             .from('exams')
             .insert({
               cohort_id: localCohort.id,
+              target_type: examData.target_type || (examData.academic_unit_id ? 'unit' : 'independent_module'),
+              academic_unit_id: examData.academic_unit_id || null,
               subject_id: primarySubjectId,
               title: examData.title.trim(),
               exam_type: examData.exam_type,
-              exam_date: examData.exam_date,
+              exam_date: examData.exam_date || null,
+              exam_time: examData.exam_time || null,
               location: examData.location?.trim() || null,
               coefficient: examData.coefficient,
+              notes: examData.notes?.trim() || null,
             })
             .select()
             .single()
@@ -801,8 +1019,11 @@ export class CohortService {
       id: `exam-${Date.now()}`,
       cohort_id: localCohort.id,
       ...examData,
+      target_type: examData.target_type || (examData.academic_unit_id ? 'unit' : 'independent_module'),
+      academic_unit_id: examData.academic_unit_id || null,
       subject_id: primarySubjectId,
       subject_ids: coveredSubjectIds,
+      exam_date: examData.exam_date || null,
     };
     localExams.push(newExam);
     return newExam;
@@ -826,11 +1047,15 @@ export class CohortService {
             .from('exams')
             .update({
               title: updates.title?.trim(),
+              target_type: updates.target_type,
+              academic_unit_id: updates.academic_unit_id || null,
               subject_id: primarySubjectId,
               exam_type: updates.exam_type,
-              exam_date: updates.exam_date,
+              exam_date: updates.exam_date || null,
+              exam_time: updates.exam_time || null,
               location: updates.location?.trim(),
               coefficient: updates.coefficient,
+              notes: updates.notes?.trim() || null,
             })
             .eq('id', examId)
             .select()
@@ -881,6 +1106,153 @@ export class CohortService {
     localExams = localExams.filter((e) => e.id !== examId);
   }
 
+  /**
+   * Calculate study workload strictly separated for:
+   * 1. Each main academic unit (including all its attached modules)
+   * 2. Each independent module
+   * Independent module lessons are NEVER mixed into any main unit's workload!
+   */
+  static async getAcademicWorkload(studentId?: string): Promise<{
+    unitsWorkload: AcademicWorkloadItem[];
+    independentWorkload: AcademicWorkloadItem[];
+  }> {
+    const [academicUnits, subjects, exams] = await Promise.all([
+      this.getAcademicUnits(),
+      this.getCurriculumTree(studentId),
+      this.getExams(),
+    ]);
+
+    // 1. Workload for the 4 Academic Units
+    const unitsWorkload: AcademicWorkloadItem[] = academicUnits.map((u) => {
+      const childSubjects = subjects.filter((s) => s.academic_unit_id === u.id);
+      let totalLessons = 0;
+      let completedLessons = 0;
+      let inProgressLessons = 0;
+      let notStartedLessons = 0;
+      let remainingMinutes = 0;
+
+      const coveredModules = childSubjects.map((s) => {
+        let count = 0;
+        s.units.forEach((un) => {
+          un.lessons.forEach((l) => {
+            count++;
+            totalLessons++;
+            const st = l.progress?.status || 'not_started';
+            const dur = l.estimated_duration_min || 60;
+            if (st === 'completed') {
+              completedLessons++;
+            } else if (st === 'in_progress') {
+              inProgressLessons++;
+              remainingMinutes += dur * 0.5;
+            } else if (st === 'needs_revision') {
+              inProgressLessons++;
+              remainingMinutes += dur * 0.7;
+            } else {
+              notStartedLessons++;
+              remainingMinutes += dur;
+            }
+          });
+        });
+        return {
+          id: s.id,
+          name: s.name,
+          lessonsCount: count,
+        };
+      });
+
+      const matchingExam =
+        exams.find(
+          (e) =>
+            e.academic_unit_id === u.id ||
+            (e.target_type === 'unit' &&
+              (e.title.toLowerCase().includes(u.code?.toLowerCase() || '') ||
+                e.title.toLowerCase().includes(u.name.toLowerCase())))
+        ) || null;
+
+      const percent =
+        totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+      return {
+        id: u.id,
+        title: u.name,
+        code: u.code || 'UE',
+        type: 'unit' as const,
+        status: u.status as any,
+        color: u.color || '#0d9488',
+        totalLessons,
+        completedLessons,
+        inProgressLessons,
+        notStartedLessons,
+        remainingHours: Math.round(remainingMinutes / 60),
+        percentCompleted: percent,
+        exam: matchingExam,
+        coveredModules,
+      };
+    });
+
+    // 2. Workload for the 4 Independent Modules
+    const independentSubjects = subjects.filter(
+      (s) => s.is_independent === true || !s.academic_unit_id
+    );
+
+    const independentWorkload: AcademicWorkloadItem[] = independentSubjects.map((s) => {
+      let totalLessons = 0;
+      let completedLessons = 0;
+      let inProgressLessons = 0;
+      let notStartedLessons = 0;
+      let remainingMinutes = 0;
+
+      s.units.forEach((un) => {
+        un.lessons.forEach((l) => {
+          totalLessons++;
+          const st = l.progress?.status || 'not_started';
+          const dur = l.estimated_duration_min || 60;
+          if (st === 'completed') {
+            completedLessons++;
+          } else if (st === 'in_progress') {
+            inProgressLessons++;
+            remainingMinutes += dur * 0.5;
+          } else if (st === 'needs_revision') {
+            inProgressLessons++;
+            remainingMinutes += dur * 0.7;
+          } else {
+            notStartedLessons++;
+            remainingMinutes += dur;
+          }
+        });
+      });
+
+      const matchingExam =
+        exams.find(
+          (e) =>
+            e.subject_id === s.id ||
+            (e.target_type === 'independent_module' &&
+              e.title.toLowerCase().includes(s.name.toLowerCase()))
+        ) || null;
+
+      const percent =
+        totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+      return {
+        id: s.id,
+        title: s.name,
+        code: s.code || 'MOD',
+        type: 'independent_module' as const,
+        status: totalLessons > 0 ? (percent === 100 ? 'completed' : 'in_progress') : 'not_started',
+        color: s.color || '#8b5cf6',
+        totalLessons,
+        completedLessons,
+        inProgressLessons,
+        notStartedLessons,
+        remainingHours: Math.round(remainingMinutes / 60),
+        percentCompleted: percent,
+        exam: matchingExam,
+      };
+    });
+
+    return { unitsWorkload, independentWorkload };
+  }
+
   // =========================================================================
   // BULK IMPORT & PERSISTENCE
   // =========================================================================
@@ -888,31 +1260,55 @@ export class CohortService {
   /**
    * Bulk import curriculum rows from CSV/Excel (Admin only)
    * Supports Subject -> Unit -> Lesson hierarchy and persists directly to Supabase.
+   * Completely idempotent: if a lesson already exists, updates its metadata without
+   * creating duplicates and without altering student progress!
    */
-  static async importCurriculumRows(rows: CurriculumImportRow[]): Promise<{ added: number }> {
+  static async importCurriculumRows(
+    rows: CurriculumImportRow[]
+  ): Promise<{ added: number; updated: number }> {
     const supabase = createClient();
-    let count = 0;
+    let addedCount = 0;
+    let updatedCount = 0;
 
     if (supabase) {
       try {
-        // Fetch existing tree from Supabase to avoid duplicating subjects or units
+        // Fetch existing tree from Supabase to avoid duplicating subjects or units or lessons
         const { data: dbSubjects } = await withTimeout(
-          supabase.from('subjects').select('id, name, units(id, title)')
+          supabase.from('subjects').select('id, name, units(id, title, lessons(id, title))')
         );
 
-        const subjectMap = new Map<string, { id: string; units: Map<string, string> }>();
+        const subjectMap = new Map<
+          string,
+          {
+            id: string;
+            units: Map<string, { id: string; lessons: Map<string, string> }>;
+          }
+        >();
+
         if (dbSubjects) {
           dbSubjects.forEach((s: any) => {
-            const uMap = new Map<string, string>();
-            (s.units || []).forEach((u: any) => uMap.set(u.title.trim().toLowerCase(), u.id));
+            const uMap = new Map<string, { id: string; lessons: Map<string, string> }>();
+            (s.units || []).forEach((u: any) => {
+              const lMap = new Map<string, string>();
+              (u.lessons || []).forEach((l: any) => {
+                const { title: cTitle } = cleanLessonTitleAndSource(l.title);
+                lMap.set(cTitle.trim().toLowerCase(), l.id);
+              });
+              uMap.set(u.title.trim().toLowerCase(), { id: u.id, lessons: lMap });
+            });
             subjectMap.set(s.name.trim().toLowerCase(), { id: s.id, units: uMap });
           });
         }
 
         for (const row of rows) {
           const subKey = row.subject_name.trim().toLowerCase();
-          const unitTitle = (row.unit_name || row.unit_title || 'Unité Générale').trim();
+          const unitTitle = (row.unit_name || row.unit_title || row.subcategory || 'Générale').trim();
           const unitKey = unitTitle.toLowerCase();
+          const { title: cleanTitle, sourceFile } = cleanLessonTitleAndSource(
+            row.lesson_title,
+            row.source_file_ref || row.source_file
+          );
+          const lessonKey = cleanTitle.toLowerCase();
 
           // 1. Resolve or create Subject
           let subInfo = subjectMap.get(subKey);
@@ -940,8 +1336,8 @@ export class CohortService {
           if (!subInfo) continue;
 
           // 2. Resolve or create Unit
-          let unitId = subInfo.units.get(unitKey);
-          if (!unitId) {
+          let unitInfo = subInfo.units.get(unitKey);
+          if (!unitInfo) {
             const { data: newUnit } = await withTimeout(
               supabase
                 .from('units')
@@ -955,39 +1351,70 @@ export class CohortService {
             );
 
             if (newUnit) {
-              unitId = newUnit.id;
-              subInfo.units.set(unitKey, newUnit.id);
+              unitInfo = { id: newUnit.id, lessons: new Map() };
+              subInfo.units.set(unitKey, unitInfo);
             }
           }
 
-          if (!unitId) continue;
+          if (!unitInfo) continue;
 
-          // 3. Insert Lesson
+          // 3. Resolve or insert Lesson (Idempotent: update if exists, insert if new)
           const duration = Number(row.estimated_minutes || row.estimated_duration_min) || 60;
           const target = Number(row.revision_target) || 3;
+          const existingLessonId = unitInfo.lessons.get(lessonKey);
 
-          const { error: lesErr } = await withTimeout(
-            supabase.from('lessons').insert({
-              unit_id: unitId,
-              title: row.lesson_title.trim(),
-              difficulty: (row.difficulty as LessonDifficulty) || 'Moyen',
-              estimated_duration_min: duration,
-              revision_target: target,
-              notes: row.notes?.trim() || null,
-              display_order: 99,
-            })
-          );
+          if (existingLessonId) {
+            // Update existing lesson metadata without touching student progress
+            const { error: updErr } = await withTimeout(
+              supabase
+                .from('lessons')
+                .update({
+                  difficulty: (row.difficulty as LessonDifficulty) || 'Moyen',
+                  estimated_duration_min: duration,
+                  revision_target: target,
+                  notes: row.notes?.trim() || null,
+                  description: row.description?.trim() || row.notes?.trim() || null,
+                  source_file_ref: sourceFile || null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', existingLessonId)
+            );
+            if (!updErr) updatedCount++;
+          } else {
+            // Insert brand new lesson
+            const { data: newLes, error: lesErr } = await withTimeout(
+              supabase
+                .from('lessons')
+                .insert({
+                  unit_id: unitInfo.id,
+                  title: cleanTitle.trim(),
+                  difficulty: (row.difficulty as LessonDifficulty) || 'Moyen',
+                  estimated_duration_min: duration,
+                  revision_target: target,
+                  notes: row.notes?.trim() || null,
+                  description: row.description?.trim() || row.notes?.trim() || null,
+                  source_file_ref: sourceFile || null,
+                  is_available: true,
+                  display_order: unitInfo.lessons.size + 1,
+                })
+                .select('id')
+                .single()
+            );
 
-          if (!lesErr) count++;
+            if (!lesErr && newLes) {
+              unitInfo.lessons.set(lessonKey, newLes.id);
+              addedCount++;
+            }
+          }
         }
 
-        return { added: count };
+        return { added: addedCount, updated: updatedCount };
       } catch (err) {
         console.warn('Supabase bulk import error, syncing locally:', err);
       }
     }
 
-    // Fallback in-memory import
+    // Fallback in-memory idempotent import
     for (const row of rows) {
       let sub = localSubjects.find(
         (s) => s.name.trim().toLowerCase() === row.subject_name.trim().toLowerCase()
@@ -1005,7 +1432,7 @@ export class CohortService {
         localSubjects.push(sub);
       }
 
-      const unitTitle = (row.unit_name || row.unit_title || 'Unité Générale').trim();
+      const unitTitle = (row.unit_name || row.unit_title || row.subcategory || 'Générale').trim();
       let unit = sub.units.find(
         (u) => u.title.trim().toLowerCase() === unitTitle.toLowerCase()
       );
@@ -1020,24 +1447,48 @@ export class CohortService {
         sub.units.push(unit);
       }
 
+      const { title: cleanTitle, sourceFile } = cleanLessonTitleAndSource(
+        row.lesson_title,
+        row.source_file_ref || row.source_file
+      );
       const duration = Number(row.estimated_minutes || row.estimated_duration_min) || 60;
       const target = Number(row.revision_target) || 3;
 
-      const newLesson: Lesson = {
-        id: `les-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        unit_id: unit.id,
-        title: row.lesson_title.trim(),
-        difficulty: (row.difficulty as LessonDifficulty) || 'Moyen',
-        estimated_duration_min: duration,
-        revision_target: target,
-        notes: row.notes,
-        display_order: unit.lessons.length + 1,
-      };
-      unit.lessons.push(newLesson);
-      count++;
+      const existingLes = unit.lessons.find(
+        (l) => l.title.trim().toLowerCase() === cleanTitle.trim().toLowerCase()
+      );
+
+      if (existingLes) {
+        // Update existing lesson (preserves student progress!)
+        existingLes.difficulty = (row.difficulty as LessonDifficulty) || existingLes.difficulty;
+        existingLes.estimated_duration_min = duration;
+        existingLes.revision_target = target;
+        if (row.notes) existingLes.notes = row.notes;
+        if (row.description) existingLes.description = row.description;
+        if (sourceFile) existingLes.source_file_ref = sourceFile;
+        existingLes.updated_at = new Date().toISOString();
+        updatedCount++;
+      } else {
+        // Insert new lesson
+        const newLesson: Lesson = {
+          id: `les-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          unit_id: unit.id,
+          title: cleanTitle.trim(),
+          difficulty: (row.difficulty as LessonDifficulty) || 'Moyen',
+          estimated_duration_min: duration,
+          revision_target: target,
+          notes: row.notes,
+          description: row.description,
+          source_file_ref: sourceFile,
+          is_available: true,
+          display_order: unit.lessons.length + 1,
+        };
+        unit.lessons.push(newLesson);
+        addedCount++;
+      }
     }
 
-    return { added: count };
+    return { added: addedCount, updated: updatedCount };
   }
 
   /**

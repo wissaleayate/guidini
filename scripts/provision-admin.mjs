@@ -2,11 +2,12 @@
 
 /**
  * ====================================================================
- * GUIDINI: Safe First-Admin Provisioning CLI Script
+ * GUIDINI: Safe Single-Admin Provisioning CLI Script
  * ====================================================================
  *
- * This server-side process safely elevates an authenticated user to Administrator.
- * It requires the Supabase Service Role Key which has elevated backend permissions.
+ * This server-side process elevates ONE authenticated user to Administrator.
+ * It enforces the Single Admin Account constraint by automatically demoting
+ * any existing admin to student.
  *
  * SECURITY NOTICE:
  * - NEVER expose SUPABASE_SERVICE_ROLE_KEY in client code or browser bundles.
@@ -58,7 +59,7 @@ async function main() {
   const targetEmail = process.argv[2]?.trim().toLowerCase();
 
   console.log('\n======================================================');
-  console.log('   GUIDINI : PROVISIONNEMENT ADMINISTRATEUR SÉCURISÉ');
+  console.log('   GUIDINI : PROVISIONNEMENT ADMINISTRATEUR UNIQUE');
   console.log('======================================================\n');
 
   if (!targetEmail || !targetEmail.includes('@')) {
@@ -108,6 +109,8 @@ async function main() {
     .ilike('email', targetEmail)
     .single();
 
+  let targetUserId = profile?.id;
+
   if (profileErr || !profile) {
     console.log('\n⚠️  Profil non trouvé dans la table "profiles".');
     console.log('Vérification dans la table d\'authentification Supabase...');
@@ -124,68 +127,74 @@ async function main() {
     if (!authUser) {
       console.error(`\n❌ ERREUR: Aucun compte trouvé pour l'email "${targetEmail}".`);
       console.log('\nProcédure à suivre:');
-      console.log('  1. L\'étudiant ou le délégué doit d\'abord s\'inscrire sur le portail :');
+      console.log('  1. Vous devez d\'abord créer votre compte sur le portail :');
       console.log('     http://localhost:3000/auth/register');
-      console.log('  2. Une fois son compte créé, réexécutez cette commande pour lui accorder les droits admin :\n');
+      console.log('  2. Une fois inscrit, réexécutez cette commande pour élever votre compte :\n');
       console.log(`     node scripts/provision-admin.mjs ${targetEmail}\n`);
       process.exit(1);
     }
 
-    console.log(`✅ Compte Auth trouvé (ID: ${authUser.id}). Création du profil administrateur...`);
-
-    const { error: insertErr } = await supabase.from('profiles').upsert({
-      id: authUser.id,
-      email: targetEmail,
-      full_name: authUser.user_metadata?.full_name || 'Administrateur Cohorte',
-      role: 'admin',
-      updated_at: new Date().toISOString(),
-    });
-
-    if (insertErr) {
-      console.error('❌ Erreur lors de la création du profil admin:', insertErr.message);
-      process.exit(1);
-    }
-  } else {
-    console.log(`✅ Profil trouvé: ${profile.full_name || targetEmail} (ID: ${profile.id}, Rôle actuel: ${profile.role})`);
-
-    if (profile.role === 'admin') {
-      console.log('\n✨ Cet utilisateur possède DÉJÀ le statut Administrateur.');
-      process.exit(0);
-    }
-
-    // Elevate role in profiles table
-    const { error: updateErr } = await supabase
-      .from('profiles')
-      .update({
-        role: 'admin',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', profile.id);
-
-    if (updateErr) {
-      console.error('❌ Erreur lors de la mise à jour du rôle:', updateErr.message);
-      process.exit(1);
-    }
-
-    // Elevate role in cohort_members if registered
-    if (profile.cohort_id) {
-      await supabase
-        .from('cohort_members')
-        .update({ role: 'admin' })
-        .eq('cohort_id', profile.cohort_id)
-        .eq('user_id', profile.id);
-    }
+    targetUserId = authUser.id;
+    console.log(`✅ Compte Auth trouvé (ID: ${authUser.id}).`);
   }
 
+  // 2. ENFORCE SINGLE ADMIN: Demote any other existing admin account to 'student'
+  console.log('🔒 Application de la contrainte d\'Administrateur Unique...');
+  const { error: demoteErr } = await supabase
+    .from('profiles')
+    .update({ role: 'student', updated_at: new Date().toISOString() })
+    .eq('role', 'admin')
+    .neq('id', targetUserId);
+
+  if (demoteErr) {
+    console.warn('Note sur la rétrogradation des anciens admins:', demoteErr.message);
+  }
+
+  // Also in cohort_members
+  await supabase
+    .from('cohort_members')
+    .update({ role: 'student' })
+    .eq('role', 'admin')
+    .neq('user_id', targetUserId);
+
+  // 3. Elevate target user to Admin
+  const { error: upsertErr } = await supabase.from('profiles').upsert({
+    id: targetUserId,
+    email: targetEmail,
+    role: 'admin',
+    is_active: true,
+    status: 'active',
+    updated_at: new Date().toISOString(),
+  });
+
+  if (upsertErr) {
+    console.error('❌ Erreur lors de l\'attribution du statut admin:', upsertErr.message);
+    process.exit(1);
+  }
+
+  // Elevate in cohort_members if membership exists
+  await supabase
+    .from('cohort_members')
+    .update({ role: 'admin' })
+    .eq('user_id', targetUserId);
+
   console.log('\n======================================================');
-  console.log('🎉 SUCCÈS ! Utilisateur promu Administrateur avec succès.');
-  console.log(`Email : ${targetEmail}`);
-  console.log('Nouveau Rôle : admin');
-  console.log('Privilèges accordés :');
+  console.log('🎉 SUCCÈS ! Administrateur Unique configuré avec succès.');
+  console.log('======================================================');
+  console.log(`Email Administrateur : ${targetEmail}`);
+  console.log(`ID Stable Supabase  : ${targetUserId}`);
+  console.log(`Rôle                : admin`);
+  console.log(`Statut du compte    : actif`);
+  console.log('\nConfiguration recommandée dans votre fichier .env.local :');
+  console.log(`  ADMIN_EMAIL=${targetEmail}`);
+  console.log(`  ADMIN_USER_ID=${targetUserId}`);
+  console.log('\nPrivilèges accordés :');
+  console.log('  - Accès exclusif à /admin et à tous les sous-menus');
   console.log('  - Gestion du cursus partagé (matières, unités, cours)');
-  console.log('  - Planification des examens et contrôles');
+  console.log('  - Planification des 8 examens et contrôles');
   console.log('  - Importation en masse CSV / Excel');
-  console.log('  - Paramétrage de la cohorte et codes d\'invitation');
+  console.log('  - Supervision des étudiants et révocation d\'accès');
+  console.log('  - Gestion des codes d\'invitation de promotion');
   console.log('======================================================\n');
   process.exit(0);
 }

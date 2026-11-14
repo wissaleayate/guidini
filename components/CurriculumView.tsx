@@ -136,14 +136,21 @@ export function CurriculumView({ initialSubjects }: CurriculumViewProps) {
     durationMin: number;
     revisionTarget?: number;
     notes?: string;
+    description?: string;
+    sourceFileRef?: string;
+    isAvailable?: boolean;
   }) => {
     if (data.id) {
       await CohortService.updateLesson(data.id, {
+        unit_id: data.unitId,
         title: data.title,
         difficulty: data.difficulty,
         estimated_duration_min: data.durationMin,
         revision_target: data.revisionTarget || 3,
         notes: data.notes,
+        description: data.description,
+        source_file_ref: data.sourceFileRef,
+        is_available: data.isAvailable,
       });
     } else {
       await CohortService.createLesson(
@@ -152,7 +159,10 @@ export function CurriculumView({ initialSubjects }: CurriculumViewProps) {
         data.difficulty,
         data.durationMin,
         data.revisionTarget || 3,
-        data.notes
+        data.notes,
+        data.description,
+        data.sourceFileRef,
+        data.isAvailable
       );
     }
     const updated = await CohortService.getCurriculumTree(user?.id);

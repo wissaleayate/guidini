@@ -393,9 +393,21 @@ export function SubjectDetailView({ initialSubject, onRefresh }: SubjectDetailVi
                                 🎯 Cible : {lesson.revision_target || 3} tours
                               </span>
 
-                              {lesson.notes && (
-                                <span className="text-[11px] text-slate-500 italic max-w-xs truncate" title={lesson.notes}>
-                                  💡 {lesson.notes}
+                              {lesson.is_available === false && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-300">
+                                  En attente d'archive
+                                </span>
+                              )}
+
+                              {lesson.source_file_ref && (
+                                <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                  📄 {lesson.source_file_ref}
+                                </span>
+                              )}
+
+                              {(lesson.description || lesson.notes) && (
+                                <span className="text-[11px] text-slate-500 italic max-w-xs truncate" title={lesson.description || lesson.notes}>
+                                  💡 {lesson.description || lesson.notes}
                                 </span>
                               )}
                             </div>

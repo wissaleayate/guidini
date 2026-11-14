@@ -49,6 +49,8 @@ export function CsvImportView() {
     revision_target: '',
     semester: '',
     notes: '',
+    description: '',
+    source_file: '',
   });
   const [showMappingConfig, setShowMappingConfig] = useState<boolean>(false);
   const [validationResult, setValidationResult] = useState<ImportValidationResult | null>(null);
@@ -215,7 +217,7 @@ export function CsvImportView() {
 
       const res = await CohortService.importCurriculumRows(validItems);
       setImportSuccessMessage(
-        `Importation réussie ! ${res.added} cours ont été intégrés ou mis à jour dans le curriculum partagé de la promotion.`
+        `Importation réussie ! ${res.added} cours ajoutés, ${res.updated || 0} cours mis à jour dans le curriculum de l'Unité 01.`
       );
       setCsvContent('');
       setValidationResult(null);
@@ -354,7 +356,7 @@ export function CsvImportView() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
-                Charger Exemple Médical
+                Charger Cursus Unité 01 (37 cours)
               </button>
             </div>
 
@@ -400,13 +402,15 @@ export function CsvImportView() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   { field: 'subject_name', label: 'Nom du Module / Matière *' },
-                  { field: 'unit_name', label: "Unité / Chapitre" },
+                  { field: 'unit_name', label: "Sous-catégorie / Unité" },
                   { field: 'lesson_title', label: 'Titre du Cours *' },
                   { field: 'difficulty', label: 'Difficulté' },
                   { field: 'estimated_minutes', label: 'Durée (min)' },
                   { field: 'revision_target', label: 'Cible Révisions (Tours)' },
+                  { field: 'source_file', label: 'Fichier Source / Support' },
+                  { field: 'description', label: 'Description / Objectifs' },
                   { field: 'semester', label: 'Semestre' },
-                  { field: 'notes', label: 'Notes / Remarques' },
+                  { field: 'notes', label: 'Consignes / Notes' },
                 ].map(({ field, label }) => (
                   <div key={field} className="bg-white p-2.5 rounded-xl border border-slate-200">
                     <label className="block text-[11px] font-semibold text-slate-700 mb-1 truncate">
@@ -872,12 +876,18 @@ export function CsvImportView() {
             </div>
 
             <div className="p-4 bg-teal-50/80 border border-teal-200 rounded-2xl text-xs text-teal-950 space-y-1.5">
-              <span className="font-bold block">Garantie d'intégrité étudiante :</span>
+              <span className="font-bold block">Garantie d'intégrité & règles d'import :</span>
               <p>
-                • Les cours existants sont mis à jour sans écraser leur identifiant.
+                • Intégration dans l'Unité 01 – Cardiovasculo-Pulmonaire ({validationResult?.validRows || 0} cours validés).
               </p>
               <p>
-                • La progression et les séances de révisions individuelles de chaque étudiant restent intactes.
+                • Tout nouveau cours importé aura par défaut le statut « Non commencé » pour l'ensemble des étudiants.
+              </p>
+              <p>
+                • Les cours déjà présents sont mis à jour de manière idempotente sans écraser leur identifiant stable.
+              </p>
+              <p>
+                • La progression et les séances de révision individuelles des étudiants restent 100% intactes.
               </p>
             </div>
 

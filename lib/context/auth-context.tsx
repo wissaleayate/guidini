@@ -15,6 +15,8 @@ interface AuthContextType {
   signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, pass: string, fullName: string, inviteCode?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -24,6 +26,8 @@ const DEFAULT_ADMIN_PROFILE: Profile = {
   full_name: 'Délégué de Promotion (Admin)',
   role: 'admin',
   cohort_id: 'c0a80101-0000-4000-8000-000000000001',
+  is_active: true,
+  status: 'active',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -34,6 +38,8 @@ const DEFAULT_STUDENT_PROFILE: Profile = {
   full_name: 'Étudiant en Médecine',
   role: 'student',
   cohort_id: 'c0a80101-0000-4000-8000-000000000001',
+  is_active: true,
+  status: 'active',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -60,20 +66,22 @@ function translateAuthError(message?: string): string {
 }
 
 const AuthContext = createContext<AuthContextType>({
-  user: DEFAULT_STUDENT_PROFILE,
+  user: null,
   role: 'student',
   actualRole: 'student',
-  isLoading: false,
+  isLoading: true,
   isConfigured: false,
   switchRole: () => {},
   signIn: async () => ({ success: false }),
   signUp: async () => ({ success: false }),
   signOut: async () => {},
+  resetPassword: async () => ({ success: false }),
+  updatePassword: async () => ({ success: false }),
   refreshProfile: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<Profile | null>(DEFAULT_STUDENT_PROFILE);
+  const [user, setUser] = useState<Profile | null>(null);
   const [actualRole, setActualRole] = useState<UserRole>('student');
   const [role, setRole] = useState<UserRole>('student');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -91,6 +99,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (data && !error) {
+        // If account is suspended or revoked
+        if (data.is_active === false || data.status === 'suspended' || data.status === 'revoked') {
+          await supabase.auth.signOut();
+          setUser(null);
+          setActualRole('student');
+          setRole('student');
+          return;
+        }
+
         setUser(data);
         setActualRole(data.role);
         setRole(data.role);
@@ -101,6 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           full_name: userMeta?.full_name || 'Membre Cohorte',
           role: 'student',
           cohort_id: null,
+          is_active: true,
+          status: 'active',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -138,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setIsLoading(false);
             });
           } else {
+            setUser(null);
             setIsLoading(false);
           }
         });
@@ -148,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (session?.user) {
               await fetchUserProfile(session.user.id, session.user.email, session.user.user_metadata);
             } else {
-              setUser(DEFAULT_STUDENT_PROFILE);
+              setUser(null);
               setActualRole('student');
               setRole('student');
             }
@@ -160,31 +180,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
     } else {
-      // In local demo mode, default to student, ready immediately
+      // In local demo mode, initialize with demo student profile
+      setUser(DEFAULT_STUDENT_PROFILE);
+      setActualRole('student');
+      setRole('student');
       setIsLoading(false);
     }
   }, []);
 
   const switchRole = (newRole: UserRole) => {
-    // If live Supabase is configured:
     // Only real admins are allowed to preview the student view or switch back to admin view!
-    if (isConfigured) {
-      if (actualRole !== 'admin' && newRole === 'admin') {
-        console.warn("Privilège refusé: seul un administrateur peut basculer d'affichage.");
-        return;
-      }
-      setRole(newRole);
+    if (actualRole !== 'admin') {
+      console.warn("Privilège refusé: seul un administrateur peut basculer d'affichage.");
       return;
     }
-
-    // In demo mode without Supabase: freely switch between mock accounts
     setRole(newRole);
-    setActualRole(newRole);
-    if (newRole === 'admin') {
-      setUser(DEFAULT_ADMIN_PROFILE);
-    } else {
-      setUser(DEFAULT_STUDENT_PROFILE);
-    }
   };
 
   const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
@@ -239,6 +249,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         full_name: fullName,
         role: 'student',
         cohort_id: 'c0a80101-0000-4000-8000-000000000001',
+        is_active: true,
+        status: 'active',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -253,13 +265,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const cleanInvite = inviteCode?.trim().toUpperCase();
 
+    // Client ALWAYS requests 'student'; database trigger also strictly enforces 'student'
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password: pass,
       options: {
         data: {
           full_name: fullName.trim(),
-          role: 'student', // Client requests student; trigger strictly enforces 'student'
+          role: 'student',
           invite_code: cleanInvite,
         },
       },
@@ -270,7 +283,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user) {
-      // If session exists immediately (email confirmation disabled in Supabase)
       if (data.session) {
         if (cleanInvite) {
           try {
@@ -282,10 +294,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await fetchUserProfile(data.user.id, data.user.email, data.user.user_metadata);
         return { success: true };
       } else {
-        // Confirmation email required by Supabase settings
         return {
           success: true,
-          message: 'Votre compte a été créé. Si la confirmation d\'email est activée dans votre projet Supabase, veuillez vérifier votre boîte de réception.',
+          message: 'Votre compte étudiant a été créé. Si la confirmation d\'email est requise, veuillez consulter votre boîte de réception.',
         };
       }
     }
@@ -300,9 +311,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut();
       }
     }
-    setUser(DEFAULT_STUDENT_PROFILE);
+    setUser(null);
     setActualRole('student');
     setRole('student');
+  };
+
+  const resetPassword = async (email: string) => {
+    if (!isConfigured) {
+      return { success: true };
+    }
+    const supabase = createClient();
+    if (!supabase) return { success: false, error: 'Supabase non configuré' };
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${origin}/auth/reset-password`,
+    });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    if (!isConfigured) {
+      return { success: true };
+    }
+    const supabase = createClient();
+    if (!supabase) return { success: false, error: 'Supabase non configuré' };
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
   };
 
   return (
@@ -317,6 +359,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signOut,
+        resetPassword,
+        updatePassword,
         refreshProfile,
       }}
     >

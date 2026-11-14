@@ -18,11 +18,13 @@ create table if not exists public.profiles (
   full_name text,
   role text not null check (role in ('admin', 'student')) default 'student',
   cohort_id uuid, -- Will reference public.cohorts after cohorts table creation
+  is_active boolean not null default true,
+  status text not null default 'active' check (status in ('active', 'suspended', 'revoked')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
--- 1.2 COHORTS (Academic Year, Study Year, Semester, Default Invite Code)
+-- 1.2 COHORTS (Academic Year, Study Year, Semester, Default Invite Code, Active Teaching Unit)
 create table if not exists public.cohorts (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -30,6 +32,8 @@ create table if not exists public.cohorts (
   study_year text not null default 'DFGSM 2 (2ème Année Médecine)',
   semester text not null default 'Semestre 1',
   invite_code text not null unique,
+  current_unit_name text not null default 'Unité 01 – Cardiovasculo-Pulmonaire',
+  current_unit_status text not null default 'in_progress' check (current_unit_status in ('in_progress', 'completed', 'archived')),
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -63,10 +67,26 @@ create table if not exists public.cohort_invites (
   created_at timestamptz not null default now()
 );
 
+-- 1.45 ACADEMIC_UNITS (Grandes Unités d'Enseignement Intégrées)
+create table if not exists public.academic_units (
+  id uuid primary key default gen_random_uuid(),
+  cohort_id uuid not null references public.cohorts(id) on delete cascade,
+  name text not null,
+  code text,
+  color text default '#0d9488',
+  semester text default 'S1',
+  display_order int not null default 0,
+  status text not null check (status in ('not_started', 'in_progress', 'completed', 'archived')) default 'not_started',
+  is_archived boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 -- 1.5 SUBJECTS (Modules / Matières du cursus)
 create table if not exists public.subjects (
   id uuid primary key default gen_random_uuid(),
   cohort_id uuid not null references public.cohorts(id) on delete cascade,
+  academic_unit_id uuid references public.academic_units(id) on delete set null,
+  is_independent boolean not null default false,
   name text not null,
   code text,
   color text default '#0d9488',
@@ -95,6 +115,9 @@ create table if not exists public.lessons (
   difficulty text not null check (difficulty in ('Facile', 'Moyen', 'Difficile', 'Très Difficile')) default 'Moyen',
   estimated_duration_min int not null check (estimated_duration_min > 0) default 60,
   revision_target int not null check (revision_target > 0) default 3,
+  description text,
+  source_file_ref text,
+  is_available boolean not null default true,
   notes text,
   is_archived boolean not null default false,
   created_at timestamptz not null default now(),
@@ -105,12 +128,16 @@ create table if not exists public.lessons (
 create table if not exists public.exams (
   id uuid primary key default gen_random_uuid(),
   cohort_id uuid not null references public.cohorts(id) on delete cascade,
+  academic_unit_id uuid references public.academic_units(id) on delete set null,
   subject_id uuid references public.subjects(id) on delete set null,
+  target_type text check (target_type in ('unit', 'independent_module')) default 'unit',
   title text not null,
   exam_type text not null check (exam_type in ('Examen Final', 'Contrôle Continu', 'Rattrapage', 'TP/Stage')) default 'Contrôle Continu',
-  exam_date timestamptz not null,
+  exam_date timestamptz, -- Optionnel : date à définir par l'administration (non inventée)
+  exam_time text,
   location text,
   coefficient numeric not null check (coefficient > 0) default 1.0,
+  notes text,
   is_archived boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -166,6 +193,11 @@ create or replace view public.student_revision_sessions as
 
 create index if not exists idx_profiles_cohort_id on public.profiles(cohort_id);
 create index if not exists idx_profiles_role on public.profiles(role);
+create index if not exists idx_profiles_status on public.profiles(status);
+create index if not exists idx_profiles_is_active on public.profiles(is_active);
+
+-- Single Admin Account Guarantee: at most one profile can hold the 'admin' role
+create unique index if not exists uq_single_admin_profile on public.profiles(role) where (role = 'admin');
 
 create index if not exists idx_cohort_members_cohort_id on public.cohort_members(cohort_id);
 create index if not exists idx_cohort_members_user_id on public.cohort_members(user_id);
@@ -200,14 +232,25 @@ create index if not exists idx_study_sessions_date on public.study_sessions(sess
 -- 3. HELPER FUNCTIONS (Security Definer)
 -- ====================================================================
 
--- Function to check if the authenticated user is an administrator
+-- Function to check if the authenticated user is an active administrator
 create or replace function public.is_admin()
 returns boolean language sql stable security definer
 set search_path = public
 as $$
   select exists (
     select 1 from public.profiles
-    where id = auth.uid() and role = 'admin'
+    where id = auth.uid() and role = 'admin' and is_active = true and status = 'active'
+  );
+$$;
+
+-- Function to check if the authenticated user has an active, non-suspended account
+create or replace function public.is_active_user()
+returns boolean language sql stable security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and is_active = true and status = 'active'
   );
 $$;
 
@@ -232,6 +275,7 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.cohorts enable row level security;
 alter table public.cohort_members enable row level security;
+alter table public.academic_units enable row level security;
 alter table public.cohort_invites enable row level security;
 alter table public.subjects enable row level security;
 alter table public.units enable row level security;
@@ -296,6 +340,18 @@ create policy "cohort_members_admin_all"
 drop policy if exists "cohort_invites_admin_all" on public.cohort_invites;
 create policy "cohort_invites_admin_all"
   on public.cohort_invites for all
+  using (public.is_admin());
+
+-- 4.45 ACADEMIC UNITS POLICIES
+-- Cohort members can read academic units; only admins can create/update/delete
+drop policy if exists "academic_units_select_cohort" on public.academic_units;
+create policy "academic_units_select_cohort"
+  on public.academic_units for select
+  using (public.is_member_of_cohort(cohort_id));
+
+drop policy if exists "academic_units_admin_manage" on public.academic_units;
+create policy "academic_units_admin_manage"
+  on public.academic_units for all
   using (public.is_admin());
 
 -- 4.5 SUBJECTS POLICIES
@@ -374,7 +430,7 @@ create policy "exam_subjects_admin_manage"
   on public.exam_subjects for all
   using (public.is_admin());
 
--- 4.10 LESSON PROGRESS POLICIES (STRICT STUDENT ISOLATION)
+-- 4.10 LESSON PROGRESS POLICIES (STRICT STUDENT ISOLATION & ACTIVE ACCOUNT)
 -- Students can ONLY view, insert, update, or delete their OWN progress!
 drop policy if exists "lesson_progress_select_own" on public.lesson_progress;
 create policy "lesson_progress_select_own"
@@ -384,20 +440,20 @@ create policy "lesson_progress_select_own"
 drop policy if exists "lesson_progress_insert_own" on public.lesson_progress;
 create policy "lesson_progress_insert_own"
   on public.lesson_progress for insert
-  with check (auth.uid() = student_id);
+  with check (auth.uid() = student_id and public.is_active_user());
 
 drop policy if exists "lesson_progress_update_own" on public.lesson_progress;
 create policy "lesson_progress_update_own"
   on public.lesson_progress for update
-  using (auth.uid() = student_id)
-  with check (auth.uid() = student_id);
+  using (auth.uid() = student_id and public.is_active_user())
+  with check (auth.uid() = student_id and public.is_active_user());
 
 drop policy if exists "lesson_progress_delete_own" on public.lesson_progress;
 create policy "lesson_progress_delete_own"
   on public.lesson_progress for delete
   using (auth.uid() = student_id);
 
--- 4.11 STUDY SESSIONS POLICIES (STRICT STUDENT ISOLATION)
+-- 4.11 STUDY SESSIONS POLICIES (STRICT STUDENT ISOLATION & ACTIVE ACCOUNT)
 -- Students can ONLY view, insert, update, or delete their OWN study sessions!
 drop policy if exists "study_sessions_select_own" on public.study_sessions;
 create policy "study_sessions_select_own"
@@ -407,13 +463,13 @@ create policy "study_sessions_select_own"
 drop policy if exists "study_sessions_insert_own" on public.study_sessions;
 create policy "study_sessions_insert_own"
   on public.study_sessions for insert
-  with check (auth.uid() = student_id);
+  with check (auth.uid() = student_id and public.is_active_user());
 
 drop policy if exists "study_sessions_update_own" on public.study_sessions;
 create policy "study_sessions_update_own"
   on public.study_sessions for update
-  using (auth.uid() = student_id)
-  with check (auth.uid() = student_id);
+  using (auth.uid() = student_id and public.is_active_user())
+  with check (auth.uid() = student_id and public.is_active_user());
 
 drop policy if exists "study_sessions_delete_own" on public.study_sessions;
 create policy "study_sessions_delete_own"
@@ -587,6 +643,7 @@ $$;
 -- ====================================================================
 
 -- Function to safely promote an existing registered user to administrator.
+-- Enforces Single Admin guarantee: demotes any previous admin to student.
 -- Can be called via Supabase SQL Editor:
 --   SELECT public.promote_user_to_admin('delegue@univ.dz');
 create or replace function public.promote_user_to_admin(target_email text)
@@ -595,6 +652,7 @@ set search_path = public
 as $$
 declare
   v_user_id uuid;
+  v_old_admin_count int;
 begin
   target_email := lower(trim(target_email));
   select id into v_user_id from public.profiles where lower(email) = target_email;
@@ -603,12 +661,21 @@ begin
     return json_build_object('success', false, 'error', 'Utilisateur introuvable avec l''email: ' || target_email);
   end if;
 
-  -- Update profile to admin
+  -- 1. Rétrograder tout compte admin existant en 'student' pour respecter l'index unique
   update public.profiles
-  set role = 'admin', updated_at = now()
+  set role = 'student', updated_at = now()
+  where role = 'admin' and id <> v_user_id;
+  get diagnostics v_old_admin_count = row_count;
+
+  update public.cohort_members
+  set role = 'student'
+  where role = 'admin' and user_id <> v_user_id;
+
+  -- 2. Élever le compte ciblé au rang d'Administrateur Unique
+  update public.profiles
+  set role = 'admin', is_active = true, status = 'active', updated_at = now()
   where id = v_user_id;
 
-  -- Update cohort_members to admin
   update public.cohort_members
   set role = 'admin'
   where user_id = v_user_id;
@@ -617,7 +684,8 @@ begin
     'success', true,
     'user_id', v_user_id,
     'email', target_email,
-    'message', 'L''utilisateur ' || target_email || ' a été promu Administrateur avec succès.'
+    'demoted_previous_admins', v_old_admin_count,
+    'message', 'L''utilisateur ' || target_email || ' est désormais l''unique Administrateur officiel.'
   );
 end;
 $$;

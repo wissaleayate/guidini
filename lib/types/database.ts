@@ -58,6 +58,17 @@ export interface CohortInvite {
   created_at: string;
 }
 
+export interface Announcement {
+  id: string;
+  cohort_id: string;
+  title: string;
+  content: string;
+  category: 'general' | 'exam' | 'urgent' | 'course';
+  is_pinned?: boolean;
+  author_name?: string;
+  created_at: string;
+}
+
 export interface AcademicUnit {
   id: string;
   cohort_id: string;

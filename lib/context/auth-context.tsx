@@ -12,7 +12,7 @@ interface AuthContextType {
   isLoading: boolean;
   isConfigured: boolean;
   switchRole: (newRole: UserRole) => void;
-  signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (email: string, pass: string) => Promise<{ success: boolean; role?: UserRole; error?: string }>;
   signUp: (email: string, pass: string, fullName: string, inviteCode?: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -197,13 +197,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(newRole);
   };
 
-  const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+  const signIn = async (email: string, pass: string): Promise<{ success: boolean; role?: UserRole; error?: string }> => {
     if (!isConfigured) {
       // Local simulation
       if (email.toLowerCase().includes('admin')) {
         setUser(DEFAULT_ADMIN_PROFILE);
         setActualRole('admin');
         setRole('admin');
+        return { success: true, role: 'admin' };
       } else {
         const student = {
           ...DEFAULT_STUDENT_PROFILE,
@@ -213,8 +214,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(student);
         setActualRole('student');
         setRole('student');
+        return { success: true, role: 'student' };
       }
-      return { success: true };
     }
 
     const supabase = createClient();
@@ -229,11 +230,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: translateAuthError(error.message) };
     }
 
+    let resolvedRole: UserRole = 'student';
     if (data.user) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('role, is_active, status')
+        .eq('id', data.user.id)
+        .single();
+
+      if (prof) {
+        if (prof.is_active === false || prof.status === 'suspended' || prof.status === 'revoked') {
+          await supabase.auth.signOut();
+          return { success: false, error: 'Votre compte a été désactivé par l\'administration.' };
+        }
+        resolvedRole = prof.role;
+      }
       await fetchUserProfile(data.user.id, data.user.email, data.user.user_metadata);
     }
 
-    return { success: true };
+    return { success: true, role: resolvedRole };
   };
 
   const signUp = async (

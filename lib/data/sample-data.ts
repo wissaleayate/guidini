@@ -1,4 +1,4 @@
-import { Cohort, AcademicUnit, SubjectWithUnits, Exam, StudentLessonProgress, StudentRevisionSession } from '@/lib/types/database';
+import { Cohort, AcademicUnit, SubjectWithUnits, Exam, StudentLessonProgress, StudentRevisionSession, Announcement } from '@/lib/types/database';
 
 export const INITIAL_COHORT: Cohort = {
   id: 'c0a80101-0000-4000-8000-000000000001',
@@ -835,3 +835,36 @@ export const INITIAL_EXAMS: Exam[] = [
 export const INITIAL_STUDENT_PROGRESS: Record<string, StudentLessonProgress> = {};
 
 export const INITIAL_REVISION_SESSIONS: StudentRevisionSession[] = [];
+
+export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: 'ann-01',
+    cohort_id: INITIAL_COHORT.id,
+    title: 'Démarrage de l\'Unité 01 – Cardiovasculo-Pulmonaire',
+    content: 'Bienvenue sur Guidini ! L\'Unité 01 est désormais active avec 5 modules intégrés (Biochimie, Physiopathologie, Radiologie, Sémiologie, Psychologie Médicale) regroupant 37 cours médicaux au total.',
+    category: 'course',
+    is_pinned: true,
+    author_name: 'Délégué de Promotion',
+    created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
+  },
+  {
+    id: 'ann-02',
+    cohort_id: INITIAL_COHORT.id,
+    title: 'Structure Officielle des 8 Contrôles Semestriels',
+    content: 'Rappel de la scolarité : notre organisation compte 4 contrôles de grandes unités intégrées et 4 contrôles de modules indépendants. Les dates précises seront communiquées par l\'administration ultérieurement.',
+    category: 'exam',
+    is_pinned: true,
+    author_name: 'Administration Faculté',
+    created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+  },
+  {
+    id: 'ann-03',
+    cohort_id: INITIAL_COHORT.id,
+    title: 'Nouveau : Radar de Rattrapage & Suivi Individuel',
+    content: 'Consultez votre Radar de Rattrapage hermétique dans l\'Espace Étudiant pour visualiser instantanément votre charge de travail et planifier vos séances de révision.',
+    category: 'general',
+    is_pinned: false,
+    author_name: 'Guidini Système',
+    created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+  },
+];

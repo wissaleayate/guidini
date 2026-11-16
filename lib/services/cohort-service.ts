@@ -14,6 +14,7 @@ import {
   ExamImportRow,
   LessonStatus,
   LessonDifficulty,
+  Announcement,
 } from '@/lib/types/database';
 import {
   INITIAL_COHORT,
@@ -22,6 +23,7 @@ import {
   INITIAL_EXAMS,
   INITIAL_STUDENT_PROGRESS,
   INITIAL_REVISION_SESSIONS,
+  INITIAL_ANNOUNCEMENTS,
 } from '@/lib/data/sample-data';
 import { cleanLessonTitleAndSource } from '@/lib/services/import-parser';
 
@@ -42,6 +44,7 @@ let localSubjects: SubjectWithUnits[] = JSON.parse(JSON.stringify(INITIAL_SUBJEC
 let localExams: Exam[] = JSON.parse(JSON.stringify(INITIAL_EXAMS));
 const localProgress: Record<string, LessonProgress> = JSON.parse(JSON.stringify(INITIAL_STUDENT_PROGRESS));
 const localRevisions: StudySession[] = JSON.parse(JSON.stringify(INITIAL_REVISION_SESSIONS));
+let localAnnouncements: Announcement[] = JSON.parse(JSON.stringify(INITIAL_ANNOUNCEMENTS));
 const studentProgressStore: Record<string, Record<string, LessonProgress>> = {
   'demo-student-id': JSON.parse(JSON.stringify(INITIAL_STUDENT_PROGRESS)),
 };
@@ -1802,5 +1805,89 @@ export class CohortService {
       success: false,
       error: `Code "${cleanCode}" introuvable. Veuillez vérifier auprès de votre administrateur ou délégué.`,
     };
+  }
+
+  /**
+   * Fetch cohort-wide announcements
+   */
+  static async getAnnouncements(): Promise<Announcement[]> {
+    const supabase = createClient();
+    if (supabase) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('announcements')
+            .select('*')
+            .order('created_at', { ascending: false })
+        );
+        if (data && !error) {
+          return data;
+        }
+      } catch {
+        // Fallback to local
+      }
+    }
+    return localAnnouncements;
+  }
+
+  /**
+   * Create a new announcement (Admin only)
+   */
+  static async createAnnouncement(announcementData: {
+    title: string;
+    content: string;
+    category?: 'general' | 'exam' | 'urgent' | 'course';
+    is_pinned?: boolean;
+    author_name?: string;
+  }): Promise<Announcement> {
+    const newAnnouncement: Announcement = {
+      id: `ann-${Date.now()}`,
+      cohort_id: localCohort.id,
+      title: announcementData.title.trim(),
+      content: announcementData.content.trim(),
+      category: announcementData.category || 'general',
+      is_pinned: Boolean(announcementData.is_pinned),
+      author_name: announcementData.author_name || 'Délégué de Promotion',
+      created_at: new Date().toISOString(),
+    };
+
+    const supabase = createClient();
+    if (supabase) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('announcements')
+            .insert(newAnnouncement)
+            .select()
+            .single()
+        );
+        if (data && !error) {
+          localAnnouncements.unshift(data);
+          return data;
+        }
+      } catch {
+        // Fallback to local
+      }
+    }
+
+    localAnnouncements.unshift(newAnnouncement);
+    return newAnnouncement;
+  }
+
+  /**
+   * Delete an announcement (Admin only)
+   */
+  static async deleteAnnouncement(id: string): Promise<void> {
+    const supabase = createClient();
+    if (supabase) {
+      try {
+        await withTimeout(
+          supabase.from('announcements').delete().eq('id', id)
+        );
+      } catch {
+        // Fallback
+      }
+    }
+    localAnnouncements = localAnnouncements.filter((a) => a.id !== id);
   }
 }

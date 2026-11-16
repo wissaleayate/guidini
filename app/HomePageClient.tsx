@@ -5,31 +5,43 @@ import { CurriculumView } from '@/components/CurriculumView';
 import { LoadingState } from '@/components/LoadingState';
 import { ErrorState } from '@/components/ErrorState';
 import { CohortService } from '@/lib/services/cohort-service';
-import { SubjectWithUnits } from '@/lib/types/database';
+import { SubjectWithUnits, AcademicUnit } from '@/lib/types/database';
 import { useAuth } from '@/lib/context/auth-context';
 
 export function HomePageClient() {
   const { user } = useAuth();
   const [subjects, setSubjects] = useState<SubjectWithUnits[]>([]);
+  const [academicUnits, setAcademicUnits] = useState<AcademicUnit[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadCurriculum = useCallback(async () => {
+  const loadCurriculum = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
-      const data = await CohortService.getCurriculumTree(user?.id);
-      setSubjects(data);
+      const studentId = user?.id || 'demo-student-id';
+      const [unitsData, subjectsData] = await Promise.all([
+        CohortService.getAcademicUnits(),
+        CohortService.getCurriculumTree(studentId),
+      ]);
+      setAcademicUnits(unitsData);
+      setSubjects(subjectsData);
     } catch (err: any) {
       console.error('Error loading curriculum:', err);
-      setError(err?.message || 'Erreur lors de la récupération du curriculum');
+      if (!silent) {
+        setError(err?.message || 'Erreur lors de la récupération du curriculum');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [user]);
 
   useEffect(() => {
-    loadCurriculum();
+    loadCurriculum(false);
   }, [loadCurriculum]);
 
   if (loading) {
@@ -41,10 +53,16 @@ export function HomePageClient() {
       <ErrorState
         title="Erreur lors du chargement du curriculum"
         message={error}
-        onRetry={loadCurriculum}
+        onRetry={() => loadCurriculum(false)}
       />
     );
   }
 
-  return <CurriculumView initialSubjects={subjects} />;
+  return (
+    <CurriculumView
+      initialSubjects={subjects}
+      initialAcademicUnits={academicUnits}
+      onReload={() => loadCurriculum(true)}
+    />
+  );
 }

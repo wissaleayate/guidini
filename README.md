@@ -1,6 +1,6 @@
 # Guidini — Portail Académique & Syllabus Radar Médical
 
-Portail académique web moderne conçu spécifiquement pour la cohorte d'étudiants en médecine (**DFGSM 2 — Deuxième Année**), propulsé par **Next.js (App Router)** et **Supabase PostgreSQL & Auth**.
+Portail académique web moderne conçu spécifiquement pour les étudiants en médecine de la **Faculté de Médecine - Constantine (Troisième Année)**, propulsé par **Next.js (App Router)** et **Supabase PostgreSQL & Auth**.
 
 ---
 
@@ -10,7 +10,7 @@ Guidini sépare rigoureusement les données pédagogiques partagées de la cohor
 
 ```
 Cohorte Partagée (Gérée par l'Admin / Délégué)
-├── Cohorte (DFGSM 2 Médecine 2026-2027)
+├── Cohorte (Faculté de Médecine - Constantine • Troisième Année 2026-2027)
 ├── Matières / Modules (ex: Cardiologie, Pneumologie)
 ├── Unités d'Enseignement / Chapitres
 ├── Cours / Séances partagées (titre, difficulté, durée estimée)
@@ -149,5 +149,5 @@ npm run build
 
 Accédez au portail sur [http://localhost:3000](http://localhost:3000).
 
-- **Mode Démonstration / Sans Supabase** : Si aucune clé n'est configurée, l'application fonctionne immédiatement en mode hors-ligne fluide avec les données de la cohorte médicale DFGSM 2.
+- **Mode Démonstration / Sans Supabase** : Si aucune clé n'est configurée, l'application fonctionne immédiatement en mode hors-ligne fluide avec les données de la Faculté de Médecine - Constantine (Troisième Année).
 - **Mode Connecté Supabase** : L'authentification réelle, le suivi personnel chiffré et le partage de cursus en direct sont automatiquement activés.

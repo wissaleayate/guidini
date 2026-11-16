@@ -8,7 +8,7 @@ import { Stethoscope, Lock, Mail, AlertCircle, ArrowRight, Eye, EyeOff, CheckSqu
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, isConfigured } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -45,19 +45,9 @@ export default function LoginPage() {
         </div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Connexion à Guidini</h1>
         <p className="text-xs text-slate-500">
-          Portail académique • Faculté de Médecine (DFGSM 2)
+          Portail académique • Faculté de Médecine - Constantine (Troisième Année)
         </p>
       </div>
-
-      {!isConfigured && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1">
-          <span className="font-semibold block">Mode Démonstration Actif :</span>
-          <p>
-            • Admin : entrez <code className="bg-amber-100 px-1 rounded font-bold">admin.med@univ.dz</code><br />
-            • Étudiant : entrez votre email personnel ou universitaire.
-          </p>
-        </div>
-      )}
 
       {error && (
         <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
@@ -79,7 +69,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="etudiant@univ.dz ou delegue@univ.dz"
+              placeholder="example@gmail.com"
               className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
             />
           </div>

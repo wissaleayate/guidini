@@ -8,7 +8,6 @@ import {
   BookOpen,
   Calendar,
   CheckCircle2,
-  FileSpreadsheet,
   Settings,
   ShieldCheck,
   UserCheck,
@@ -17,7 +16,6 @@ import {
   LayoutDashboard,
   Eye,
   Users,
-  Compass,
   User,
   Megaphone,
   X,
@@ -34,26 +32,36 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { role, actualRole, switchRole, isConfigured } = useAuth();
   const isAdmin = role === 'admin';
 
-  // Requirement 2: Student Navigation
-  // 1. Dashboard, 2. Curriculum, 3. Controls & Exams, 4. Catch-Up Radar, 5. Study Tracker, 6. My Profile
+  // Keyboard accessibility: close drawer on Escape
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Student Navigation (5 items - Catch-up radar excluded for this version)
   const studentLinks = [
-    { href: '/student', label: 'Tableau de Bord', icon: LayoutDashboard },
+    { href: '/student', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/', label: 'Curriculum & Modules', icon: BookOpen },
-    { href: '/student/exams', label: 'Contrôles & Examens', icon: Calendar },
-    { href: '/student/radar', label: 'Radar de Rattrapage', icon: Compass },
-    { href: '/student/progress', label: 'Suivi des Révisions', icon: CheckCircle2 },
-    { href: '/student/profile', label: 'Mon Profil Étudiant', icon: User },
+    { href: '/student/exams', label: 'Controls & Exams', icon: Calendar },
+    { href: '/student/progress', label: 'Study Tracker', icon: CheckCircle2 },
+    { href: '/student/profile', label: 'My Profile', icon: User },
   ];
 
-  // Requirement 3: Admin Navigation
-  // 1. Admin Dashboard, 2. Curriculum Management, 3. Exams Management, 4. Students Management, 5. Announcements, 6. Settings
+  // Admin Navigation (6 items + student preview toggle)
   const adminLinks = [
-    { href: '/admin', label: 'Tableau de Bord Admin', icon: LayoutDashboard },
-    { href: '/admin/exams', label: 'Gestion des Examens', icon: Calendar },
-    { href: '/admin/users', label: 'Gestion des Étudiants', icon: Users },
-    { href: '/admin/announcements', label: 'Annonces Officielles', icon: Megaphone },
-    { href: '/admin/import', label: 'Import CSV & Excel', icon: FileSpreadsheet },
-    { href: '/admin/cohort', label: 'Paramètres Promotion', icon: Settings },
+    { href: '/admin', label: 'Admin Dashboard', icon: LayoutDashboard },
+    { href: '/admin', label: 'Curriculum Management', icon: BookOpen },
+    { href: '/admin/exams', label: 'Exams Management', icon: Calendar },
+    { href: '/admin/users', label: "Gestion des Étudiants & Codes d'Accès", icon: Users },
+    { href: '/admin/announcements', label: 'Announcements', icon: Megaphone },
+    { href: '/admin/cohort', label: 'Settings', icon: Settings },
     { href: '/student', label: 'Aperçu Vue Étudiant', icon: Eye },
   ];
 
@@ -81,7 +89,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               </span>
             </div>
             <span className="text-xs text-slate-400 font-medium">
-              DFGSM 2 • 2026–2027
+              Troisième Année • 2026–2027
             </span>
           </div>
         </Link>

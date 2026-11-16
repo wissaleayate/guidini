@@ -174,7 +174,7 @@ export function StudentProgressView({ initialSubjects }: StudentProgressViewProp
       </div>
 
       {/* Progress Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Progression</span>

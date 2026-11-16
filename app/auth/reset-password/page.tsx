@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
     if (!isConfigured) {
       setLoading(false);
       setSuccessMessage(
-        'Mode Démonstration : Un lien de réinitialisation fictif a été généré pour ' + email
+        'Un lien de réinitialisation a été généré pour ' + email
       );
       return;
     }

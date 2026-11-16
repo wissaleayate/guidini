@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "prebuild": "node -e \"const { execSync } = require('child_process'); try { execSync('cmd /c attrib -r -s .next /s /d', { stdio: 'ignore' }); } catch {} try { require('fs').rmSync('.next', { recursive: true, force: true }); } catch {}\"",
+    "prebuild": "node -e \"const { execSync } = require('child_process'); try { execSync('cmd /c attrib -r -s .next /s /d', { stdio: 'ignore' }); } catch {}\"",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "admin:promote": "node scripts/provision-admin.mjs",
     "test:access": "node scripts/test-access-control.mjs",
-    "test:academic": "node scripts/test-academic-structure.mjs"
+    "test:academic": "node scripts/test-academic-structure.mjs",
+    "test:corrections": "node scripts/test-comprehensive-corrections.mjs",
+    "test:ux": "node scripts/test-ux-and-branding.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

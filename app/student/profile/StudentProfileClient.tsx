@@ -193,7 +193,7 @@ export function StudentProfileClient() {
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                 <span className="text-slate-400 font-medium block">Niveau d'Études :</span>
                 <span className="font-bold text-slate-900 block text-sm">
-                  {cohort?.study_year || 'DFGSM 2 (Deuxième Année)'}
+                  {cohort?.study_year || 'Troisième Année'}
                 </span>
               </div>
 

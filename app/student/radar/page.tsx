@@ -2,7 +2,7 @@ import { StudentRadarClient } from './StudentRadarClient';
 
 export const metadata = {
   title: 'Radar de Rattrapage & Charge d\'Étude | Guidini',
-  description: 'Analyse hermétique et calculée de la charge d\'étude médicale pour la promotion DFGSM 2.',
+  description: 'Analyse hermétique et calculée de la charge d\'étude médicale pour la Troisième Année.',
 };
 
 export default function StudentRadarPage() {

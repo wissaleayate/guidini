@@ -79,7 +79,7 @@ export function UserProfileMenu() {
             {user.full_name || 'Étudiant'}
           </span>
           <span className="text-[10px] text-slate-500 truncate max-w-[120px]">
-            {isAdmin ? 'Délégué Admin' : 'Étudiant DFGSM 2'}
+            {isAdmin ? 'Délégué Admin' : 'Étudiant Troisième Année'}
           </span>
         </div>
         <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -107,7 +107,7 @@ export function UserProfileMenu() {
             <div className="text-[11px] text-slate-500 truncate">{user.email}</div>
             <div className="text-[10px] text-teal-700 font-semibold flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-teal-600" />
-              Promotion DFGSM 2 (2026–2027)
+              Faculté de Médecine - Constantine (Troisième Année)
             </div>
           </div>
 

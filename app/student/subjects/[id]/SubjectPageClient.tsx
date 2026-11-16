@@ -18,10 +18,10 @@ export function SubjectPageClient() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadSubject = useCallback(async () => {
+  const loadSubject = useCallback(async (silent = false) => {
     if (!subjectId) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const studentId = user?.id || 'demo-student-id';
       const data = await CohortService.getSubjectById(subjectId, studentId);
@@ -32,14 +32,14 @@ export function SubjectPageClient() {
       }
     } catch (err: any) {
       console.error('Error loading subject:', err);
-      setError(err?.message || 'Erreur lors du chargement du module');
+      if (!silent) setError(err?.message || 'Erreur lors du chargement du module');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [subjectId, user]);
 
   useEffect(() => {
-    loadSubject();
+    loadSubject(false);
   }, [loadSubject]);
 
   if (loading) {
@@ -51,10 +51,10 @@ export function SubjectPageClient() {
       <ErrorState
         title="Module introuvable"
         message={error || 'Ce module n\'existe pas dans le programme officiel.'}
-        onRetry={loadSubject}
+        onRetry={() => loadSubject(false)}
       />
     );
   }
 
-  return <SubjectDetailView initialSubject={subject} onRefresh={loadSubject} />;
+  return <SubjectDetailView initialSubject={subject} onRefresh={() => loadSubject(true)} />;
 }

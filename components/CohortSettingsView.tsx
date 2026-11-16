@@ -161,7 +161,7 @@ export function CohortSettingsView({ initialCohort }: CohortSettingsViewProps) {
                   required
                   value={studyYear}
                   onChange={(e) => setStudyYear(e.target.value)}
-                  placeholder="DFGSM 2 (Deuxième Année)"
+                  placeholder="Troisième Année"
                   className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>

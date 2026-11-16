@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Profile, CohortInvite } from '@/lib/types/database';
+import { CohortService } from '@/lib/services/cohort-service';
 import {
   Users,
   ShieldCheck,
@@ -38,51 +39,45 @@ export function AdminUsersView() {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/users');
+      const res = await fetch('/api/admin/users', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        setUsers(data.users || []);
+        const serverUsers: Profile[] = data.users || [];
+        const localRegistered = CohortService.getRegisteredStudents();
+        const seenEmails = new Set(serverUsers.map((u) => u.email.toLowerCase()));
+        const merged = [...serverUsers];
+        for (const lr of localRegistered) {
+          if (!seenEmails.has(lr.email.toLowerCase())) {
+            merged.push(lr);
+            seenEmails.add(lr.email.toLowerCase());
+          }
+        }
+        setUsers(merged);
       } else {
-        // Fallback for offline demo mode
-        const fallbackUsers: Profile[] = [
-          {
-            id: 'admin-user-001',
-            email: 'admin.med@univ.dz',
-            full_name: 'Délégué de Promotion (Admin)',
-            role: 'admin',
-            cohort_id: 'c0a80101-0000-4000-8000-000000000001',
-            is_active: true,
-            status: 'active',
-            created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: 'demo-student-1',
-            email: 'etudiant.med@univ.dz',
-            full_name: 'Étudiant en Médecine',
-            role: 'student',
-            cohort_id: 'c0a80101-0000-4000-8000-000000000001',
-            is_active: true,
-            status: 'active',
-            created_at: new Date(Date.now() - 14 * 86400000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: 'demo-student-2',
-            email: 'sarah.b@univ.dz',
-            full_name: 'Sarah Benali',
-            role: 'student',
-            cohort_id: 'c0a80101-0000-4000-8000-000000000001',
-            is_active: true,
-            status: 'active',
-            created_at: new Date(Date.now() - 7 * 86400000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ];
-        setUsers(fallbackUsers);
+        // Fallback: display only real registered students from local store
+        const registered = CohortService.getRegisteredStudents();
+        const adminProfile: Profile = {
+          id: 'admin-authorized-01',
+          email: 'admin.med@univ.dz',
+          full_name: 'Délégué de Promotion (Admin)',
+          role: 'admin',
+          cohort_id: 'c0a80101-0000-4000-8000-000000000001',
+          is_active: true,
+          status: 'active',
+          created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        const seen = new Set<string>();
+        const list = [adminProfile, ...registered].filter((u) => {
+          if (seen.has(u.email.toLowerCase())) return false;
+          seen.add(u.email.toLowerCase());
+          return true;
+        });
+        setUsers(list);
       }
     } catch {
-      // offline fallback
+      const registered = CohortService.getRegisteredStudents();
+      setUsers(registered);
     } finally {
       setLoading(false);
     }

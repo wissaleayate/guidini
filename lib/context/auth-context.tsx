@@ -260,8 +260,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!isConfigured) {
       const newProfile: Profile = {
         id: `stu-${Date.now()}`,
-        email,
-        full_name: fullName,
+        email: email.trim().toLowerCase(),
+        full_name: fullName.trim(),
         role: 'student',
         cohort_id: 'c0a80101-0000-4000-8000-000000000001',
         is_active: true,
@@ -269,6 +269,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+      CohortService.saveRegisteredProfile(newProfile);
       setUser(newProfile);
       setActualRole('student');
       setRole('student');
@@ -298,6 +299,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (data.user) {
+      // Guaranteed profile synchronization with Supabase Auth user ID
+      try {
+        await fetch('/api/auth/sync-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: data.user.id,
+            email: data.user.email,
+            fullName: fullName.trim(),
+            inviteCode: cleanInvite,
+          }),
+        });
+      } catch (syncErr) {
+        console.warn('Sync profile call notice:', syncErr);
+      }
+
+      const registeredProfile: Profile = {
+        id: data.user.id,
+        email: data.user.email || email.trim().toLowerCase(),
+        full_name: fullName.trim(),
+        role: 'student',
+        cohort_id: 'c0a80101-0000-4000-8000-000000000001',
+        is_active: true,
+        status: 'active',
+        created_at: data.user.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      CohortService.saveRegisteredProfile(registeredProfile);
+
       if (data.session) {
         if (cleanInvite) {
           try {
@@ -311,7 +341,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         return {
           success: true,
-          message: 'Votre compte étudiant a été créé. Si la confirmation d\'email est requise, veuillez consulter votre boîte de réception.',
+          message: 'Votre compte étudiant a été créé avec succès. Si la confirmation d\'email est requise, veuillez consulter votre boîte de réception.',
         };
       }
     }

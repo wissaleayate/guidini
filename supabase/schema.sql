@@ -29,7 +29,7 @@ create table if not exists public.cohorts (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   academic_year text not null default '2026 - 2027',
-  study_year text not null default 'DFGSM 2 (2ème Année Médecine)',
+  study_year text not null default 'Troisième Année',
   semester text not null default 'Semestre 1',
   invite_code text not null unique,
   current_unit_name text not null default 'Unité 01 – Cardiovasculo-Pulmonaire',
@@ -532,14 +532,21 @@ begin
   end if;
 
   -- Insert profile with enforced 'student' role
-  insert into public.profiles (id, email, full_name, role, cohort_id)
+  insert into public.profiles (id, email, full_name, role, cohort_id, is_active, status)
   values (
     new.id,
     new.email,
-    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(new.email, '@', 1)),
     'student', -- Enforce student role!
-    v_cohort_id
-  );
+    v_cohort_id,
+    true,
+    'active'
+  )
+  on conflict (id) do update set
+    email = excluded.email,
+    full_name = coalesce(nullif(excluded.full_name, ''), public.profiles.full_name),
+    cohort_id = coalesce(public.profiles.cohort_id, excluded.cohort_id),
+    updated_at = now();
 
   -- If joined cohort, create membership record as 'student'
   if v_cohort_id is not null then
@@ -698,9 +705,9 @@ $$;
 insert into public.cohorts (id, name, academic_year, study_year, semester, invite_code)
 values (
   'c0a80101-0000-4000-8000-000000000001',
-  'Faculté de Médecine - Cohorte DFGSM 2',
+  'Faculté de Médecine - Constantine',
   '2026 - 2027',
-  'DFGSM 2 (Deuxième Année)',
+  'Troisième Année',
   'Semestre 1',
   'MED-2026-ALG'
 )

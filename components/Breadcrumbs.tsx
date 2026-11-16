@@ -53,8 +53,6 @@ export function Breadcrumbs() {
         items.push({ label: 'Examens & Contrôles' });
       } else if (pathname === '/student/progress') {
         items.push({ label: 'Suivi & Révisions' });
-      } else if (pathname === '/student/radar') {
-        items.push({ label: 'Radar de Rattrapage' });
       } else if (pathname === '/student/profile') {
         items.push({ label: 'Mon Profil Étudiant' });
       } else if (pathname.startsWith('/student/subjects/')) {
@@ -132,7 +130,7 @@ export function Breadcrumbs() {
         ) : (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200/80">
             <Sparkles className="w-3 h-3 text-teal-600" />
-            DFGSM 2 • 2026–2027
+            Troisième Année • 2026–2027
           </span>
         )}
       </div>

@@ -26,7 +26,6 @@ import {
   AlertTriangle,
   History,
   Bookmark,
-  Compass,
   ChevronRight,
 } from 'lucide-react';
 
@@ -44,7 +43,6 @@ export function StudentDashboardView({
   initialExams,
   initialSessions,
   academicUnits = [],
-  cohort,
   examsLastUpdated,
 }: StudentDashboardViewProps) {
   const { user } = useAuth();
@@ -314,19 +312,18 @@ export function StudentDashboardView({
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold border border-teal-400/30 flex-wrap">
               <span className="flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" />
-                Promotion {cohort.name || 'DFGSM 2 Médecine'}
+                Faculté / Promotion : Faculté de Médecine - Constantine
               </span>
               <span>•</span>
               <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-400/30">
-                8 Contrôles Académiques (4 Unités + 4 Modules Indépendants)
+                Niveau d'Études : Troisième Année
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Bonjour, {user?.full_name || 'Étudiant en Médecine'} 👋
             </h1>
             <p className="text-xs sm:text-sm text-teal-100/90 max-w-2xl leading-relaxed">
-              {cohort.study_year || 'Deuxième Année'} • {cohort.academic_year || '2026–2027'} • {cohort.semester || 'Semestre 1'}.
-              Suivez l'avancement de vos 4 unités intégrées et de vos 4 modules indépendants en toute clarté.
+              Faculté / Promotion : Faculté de Médecine - Constantine • Niveau d'Études : Troisième Année
             </p>
           </div>
 
@@ -343,7 +340,7 @@ export function StudentDashboardView({
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Controls Status Card */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
@@ -520,149 +517,7 @@ export function StudentDashboardView({
         </div>
       </div>
 
-      {/* =========================================================================
-          SECTION G : CATCH-UP RADAR & CHARGE D'ÉTUDE HERMÉTIQUE
-         ========================================================================= */}
-      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-700">
-              <Compass className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900">
-                Radar de Rattrapage & Charge d'Étude Séparée
-              </h2>
-              <p className="text-xs text-slate-500">
-                Calcul indépendant de la charge pour chaque unité et chaque module autonome (aucune interpénétration).
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
-              Strictement hermétique
-            </span>
-          </div>
-        </div>
-
-        {/* Catch-Up Comparison Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Workload: 4 Main Units */}
-          <div className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-teal-600" />
-                <h3 className="text-sm font-bold text-slate-900">
-                  Charge des 4 Grandes Unités
-                </h3>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-500">
-                {unitsData.reduce((acc, u) => acc + u.remainingHours, 0)}h restantes
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {unitsData.map((item) => (
-                <div
-                  key={item.unit.id}
-                  className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2 hover:border-teal-300 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900">
-                      {item.unit.name}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        item.unit.status === 'in_progress'
-                          ? 'bg-amber-50 text-amber-900 border border-amber-300'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {item.unit.status === 'in_progress' ? 'En cours' : 'À venir'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>
-                      {item.completedLessons} / {item.totalLessons} cours validés
-                    </span>
-                    <span className="font-semibold text-slate-700">
-                      {item.percent}% • ~{item.remainingHours}h d'étude
-                    </span>
-                  </div>
-
-                  {/* Micro Progress Bar */}
-                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-teal-500 transition-all"
-                      style={{ width: `${item.percent}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Workload: 4 Independent Modules */}
-          <div className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Bookmark className="w-4 h-4 text-purple-600" />
-                <h3 className="text-sm font-bold text-slate-900">
-                  Charge des 4 Modules Indépendants
-                </h3>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-500">
-                Disciplines autonomes
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {independentData.map((item) => (
-                <div
-                  key={item.subject.id}
-                  className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2 hover:border-purple-300 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: item.subject.color || '#8b5cf6' }}
-                      />
-                      <span className="text-xs font-bold text-slate-900">
-                        {item.subject.name}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200">
-                      {item.subject.code || 'MOD'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>
-                      {item.totalLessons > 0
-                        ? `${item.completedLessons} / ${item.totalLessons} cours validés`
-                        : 'Programme en attente de cours'}
-                    </span>
-                    <span className="font-semibold text-slate-700">
-                      {item.percent}% • ~{item.remainingHours}h
-                    </span>
-                  </div>
-
-                  {/* Micro Progress Bar */}
-                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-500 transition-all"
-                      style={{ width: `${item.percent}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* =========================================================================
           SECTION F.1 : CONTRÔLES DES GRANDES UNITÉS (UNIT CONTROLS)

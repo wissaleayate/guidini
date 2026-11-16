@@ -2,9 +2,9 @@ import { Cohort, AcademicUnit, SubjectWithUnits, Exam, StudentLessonProgress, St
 
 export const INITIAL_COHORT: Cohort = {
   id: 'c0a80101-0000-4000-8000-000000000001',
-  name: 'Faculté de Médecine - Cohorte DFGSM 2',
+  name: 'Faculté de Médecine - Constantine',
   academic_year: '2026 - 2027',
-  study_year: 'DFGSM 2 (Deuxième Année)',
+  study_year: 'Troisième Année',
   semester: 'Semestre 1',
   invite_code: 'MED-2026-ALG',
   current_unit_name: 'Unité 01 – Cardiovasculo-Pulmonaire',

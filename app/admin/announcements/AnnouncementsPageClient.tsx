@@ -97,7 +97,7 @@ export function AnnouncementsPageClient() {
             Annonces Officielles de la Promotion
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Publiez des messages, consignes pédagogiques ou alertes d'examens visibles par tous les étudiants de la promotion DFGSM 2 dans leur tableau de bord et cloche de notification.
+            Publiez des messages, consignes pédagogiques ou alertes d'examens visibles par tous les étudiants de la promotion de médecine dans leur tableau de bord et cloche de notification.
           </p>
         </div>
 

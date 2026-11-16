@@ -270,7 +270,7 @@ export function ExamsList({
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-semibold mb-3 flex-wrap">
             <Calendar className="w-3.5 h-3.5" />
-            Régime des Évaluations • DFGSM 2 Médecine 2026–2027
+            Régime des Évaluations • Faculté de Médecine - Constantine (Troisième Année)
             <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-400/30">
               8 Contrôles Officiels
             </span>
@@ -409,7 +409,7 @@ export function ExamsList({
       </div>
 
       {/* Grid of Exams */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
         {filteredExams.length === 0 ? (
           <div className="col-span-full bg-white rounded-3xl p-12 text-center border border-slate-200">
             <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />

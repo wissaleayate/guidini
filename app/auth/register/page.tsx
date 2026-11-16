@@ -19,7 +19,7 @@ import {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { signUp, isConfigured } = useAuth();
+  const { signUp } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -73,16 +73,9 @@ export default function RegisterPage() {
         </div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Inscription Étudiant</h1>
         <p className="text-xs text-slate-500">
-          Rejoignez la cohorte médicale DFGSM 2 (2026–2027)
+          Faculté de Médecine - Constantine • Troisième Année (2026–2027)
         </p>
       </div>
-
-      {!isConfigured && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-          <span className="font-semibold block mb-0.5">Mode Démonstration :</span>
-          L'inscription crée une session locale immédiatement sans nécessiter de serveur Supabase.
-        </div>
-      )}
 
       {successNotice && (
         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-3">
@@ -123,7 +116,7 @@ export default function RegisterPage() {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ex: Sarah Benali"
+                placeholder="Wissale Belala"
                 className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -141,7 +134,7 @@ export default function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="sarah.benali@univ.dz"
+                placeholder="example@gmail.com"
                 className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -218,7 +211,7 @@ export default function RegisterPage() {
               />
             </div>
             <span className="text-[11px] text-slate-400 mt-1 block">
-              Code officiel fourni pour rattacher votre compte à la cohorte DFGSM 2.
+              Code officiel fourni pour rattacher votre compte à la promotion de médecine.
             </span>
           </div>
 

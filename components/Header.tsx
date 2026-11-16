@@ -32,7 +32,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
             <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span className="font-semibold text-amber-950">Mode Démonstration :</span>
             <span className="truncate">
-              Données pédagogiques chargées (DFGSM 2). Les clés Supabase réelles peuvent être configurées dans .env.local.
+              Données pédagogiques chargées (Troisième Année - Constantine). Les clés Supabase réelles peuvent être configurées dans .env.local.
             </span>
           </div>
           <span className="text-[11px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300 shrink-0 hidden sm:inline">
@@ -42,13 +42,13 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
       )}
 
       {/* Main Header Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Left: Mobile Menu Button & Academic Title */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={onOpenMobileMenu}
-              className="md:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              className="md:hidden p-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Ouvrir le menu"
             >
               <Menu className="w-5 h-5" />
@@ -60,13 +60,16 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
                 <Stethoscope className="w-4 h-4" />
               </div>
               <span className="font-bold text-base text-slate-900 tracking-tight">Guidini</span>
+              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-200 shrink-0">
+                3A Med
+              </span>
             </Link>
 
             {/* Academic Information (Desktop / Tablet) */}
             <div className="hidden md:flex flex-col">
               <div className="flex items-center gap-2">
                 <h1 className="text-sm font-bold text-slate-900 tracking-tight">
-                  Guidini • Faculté de Médecine
+                  Guidini • Faculté de Médecine - Constantine
                 </h1>
                 {isAdmin ? (
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
@@ -75,7 +78,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
                 ) : (
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-teal-600" />
-                    DFGSM 2 Médecine
+                    Troisième Année
                   </span>
                 )}
                 <span className="hidden lg:inline text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">

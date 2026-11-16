@@ -15,6 +15,7 @@ import {
   LessonStatus,
   LessonDifficulty,
   Announcement,
+  Profile,
 } from '@/lib/types/database';
 import {
   INITIAL_COHORT,
@@ -49,7 +50,55 @@ const studentProgressStore: Record<string, Record<string, LessonProgress>> = {
   'demo-student-id': JSON.parse(JSON.stringify(INITIAL_STUDENT_PROGRESS)),
 };
 
+// Store for real registered students across offline/local sessions
+const localRegisteredProfiles: Profile[] = [];
+
 export class CohortService {
+  /**
+   * Save a real registered profile to local repository
+   */
+  static saveRegisteredProfile(profile: Profile): void {
+    const existingIdx = localRegisteredProfiles.findIndex(
+      (p) => p.id === profile.id || p.email.toLowerCase() === profile.email.toLowerCase()
+    );
+    if (existingIdx !== -1) {
+      localRegisteredProfiles[existingIdx] = {
+        ...localRegisteredProfiles[existingIdx],
+        ...profile,
+        updated_at: new Date().toISOString(),
+      };
+    } else {
+      localRegisteredProfiles.push(profile);
+    }
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('guidini_registered_students', JSON.stringify(localRegisteredProfiles));
+      } catch {}
+    }
+  }
+
+  /**
+   * Retrieve all real registered student profiles
+   */
+  static getRegisteredStudents(): Profile[] {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const raw = window.localStorage.getItem('guidini_registered_students');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((p: Profile) => {
+              if (!localRegisteredProfiles.some((lp) => lp.id === p.id)) {
+                localRegisteredProfiles.push(p);
+              }
+            });
+          }
+        }
+      } catch {}
+    }
+    return [...localRegisteredProfiles].filter((p) => p.role === 'student');
+  }
   /**
    * Fetch current cohort information with member count
    */

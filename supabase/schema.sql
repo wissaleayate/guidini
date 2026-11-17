@@ -727,51 +727,51 @@ on conflict (code) do nothing;
 -- 8.1 Subject: Cardiologie
 insert into public.subjects (id, cohort_id, name, code, color, semester, display_order)
 values
-  ('sub-cardio-01', 'c0a80101-0000-4000-8000-000000000001', 'Cardiologie & Vasculaire', 'CARD-201', '#0284c7', 'S1', 1)
+  ('c0a80101-0000-4000-8000-000000000101', 'c0a80101-0000-4000-8000-000000000001', 'Cardiologie & Vasculaire', 'CARD-201', '#0284c7', 'S1', 1)
 on conflict (id) do nothing;
 
 insert into public.units (id, subject_id, title, display_order)
 values
-  ('unit-cardio-u1', 'sub-cardio-01', 'Physiopathologie Cardiovasculaire', 1),
-  ('unit-cardio-u2', 'sub-cardio-01', 'Rythmologie & Valvulopathies', 2)
+  ('c0a80101-0000-4000-8000-000000000201', 'c0a80101-0000-4000-8000-000000000101', 'Physiopathologie Cardiovasculaire', 1),
+  ('c0a80101-0000-4000-8000-000000000202', 'c0a80101-0000-4000-8000-000000000101', 'Rythmologie & Valvulopathies', 2)
 on conflict (id) do nothing;
 
 insert into public.lessons (id, unit_id, title, display_order, difficulty, estimated_duration_min, notes)
 values
-  ('les-cardio-01', 'unit-cardio-u1', 'Insuffisance Cardiaque Aiguë et Chronique', 1, 'Difficile', 90, 'Classification NYHA et critères de Framingham.'),
-  ('les-cardio-02', 'unit-cardio-u1', 'Hypertension Artérielle de l''adulte (HTA)', 2, 'Moyen', 60, 'Recommandations ESC/ESH et complications cibles.'),
-  ('les-cardio-03', 'unit-cardio-u1', 'Syndromes Coronariens Aigus (SCA ST+ et ST-)', 3, 'Très Difficile', 120, 'ECG en urgence, cinétique troponine et reperfusion.'),
-  ('les-cardio-04', 'unit-cardio-u2', 'Fibrillation Atriale (FA) et Flutter', 1, 'Difficile', 75, 'Score CHA2DS2-VASc et anticoagulation.'),
-  ('les-cardio-05', 'unit-cardio-u2', 'Rétrécissement Aortique & Insuffisance Mitrale', 2, 'Moyen', 60, 'Auscultation cardiaque et indications chirurgicales.')
+  ('c0a80101-0000-4000-8000-000000000301', 'c0a80101-0000-4000-8000-000000000201', 'Insuffisance Cardiaque Aiguë et Chronique', 1, 'Difficile', 90, 'Classification NYHA et critères de Framingham.'),
+  ('c0a80101-0000-4000-8000-000000000302', 'c0a80101-0000-4000-8000-000000000201', 'Hypertension Artérielle de l''adulte (HTA)', 2, 'Moyen', 60, 'Recommandations ESC/ESH et complications cibles.'),
+  ('c0a80101-0000-4000-8000-000000000303', 'c0a80101-0000-4000-8000-000000000201', 'Syndromes Coronariens Aigus (SCA ST+ et ST-)', 3, 'Très Difficile', 120, 'ECG en urgence, cinétique troponine et reperfusion.'),
+  ('c0a80101-0000-4000-8000-000000000304', 'c0a80101-0000-4000-8000-000000000202', 'Fibrillation Atriale (FA) et Flutter', 1, 'Difficile', 75, 'Score CHA2DS2-VASc et anticoagulation.'),
+  ('c0a80101-0000-4000-8000-000000000305', 'c0a80101-0000-4000-8000-000000000202', 'Rétrécissement Aortique & Insuffisance Mitrale', 2, 'Moyen', 60, 'Auscultation cardiaque et indications chirurgicales.')
 on conflict (id) do nothing;
 
 -- 8.2 Subject: Pneumologie
 insert into public.subjects (id, cohort_id, name, code, color, semester, display_order)
 values
-  ('sub-pneumo-02', 'c0a80101-0000-4000-8000-000000000001', 'Pneumologie', 'PNEU-202', '#0d9488', 'S1', 2)
+  ('c0a80101-0000-4000-8000-000000000102', 'c0a80101-0000-4000-8000-000000000001', 'Pneumologie', 'PNEU-202', '#0d9488', 'S1', 2)
 on conflict (id) do nothing;
 
 insert into public.units (id, subject_id, title, display_order)
 values
-  ('unit-pneumo-u1', 'sub-pneumo-02', 'Pathologies Obstructives & Infectieuses', 1)
+  ('c0a80101-0000-4000-8000-000000000203', 'c0a80101-0000-4000-8000-000000000102', 'Pathologies Obstructives & Infectieuses', 1)
 on conflict (id) do nothing;
 
 insert into public.lessons (id, unit_id, title, display_order, difficulty, estimated_duration_min, notes)
 values
-  ('les-pneu-01', 'unit-pneumo-u1', 'Asthme aigu grave et traitement de fond', 1, 'Moyen', 60, 'Paliers GINA et urgence de la crise sévère.'),
-  ('les-pneu-02', 'unit-pneumo-u1', 'Bronchopneumopathie Chronique Obstructive (BPCO)', 2, 'Difficile', 80, 'EFR, classification GOLD et oxygénothérapie.'),
-  ('les-pneu-03', 'unit-pneumo-u1', 'Pneumonies Aiguës Communautaires (PAC)', 3, 'Moyen', 60, 'Score CRB-65 et antibiothérapie probabiliste.')
+  ('c0a80101-0000-4000-8000-000000000306', 'c0a80101-0000-4000-8000-000000000203', 'Asthme aigu grave et traitement de fond', 1, 'Moyen', 60, 'Paliers GINA et urgence de la crise sévère.'),
+  ('c0a80101-0000-4000-8000-000000000307', 'c0a80101-0000-4000-8000-000000000203', 'Bronchopneumopathie Chronique Obstructive (BPCO)', 2, 'Difficile', 80, 'EFR, classification GOLD et oxygénothérapie.'),
+  ('c0a80101-0000-4000-8000-000000000308', 'c0a80101-0000-4000-8000-000000000203', 'Pneumonies Aiguës Communautaires (PAC)', 3, 'Moyen', 60, 'Score CRB-65 et antibiothérapie probabiliste.')
 on conflict (id) do nothing;
 
 -- 8.3 Exams & Exam Subjects
 insert into public.exams (id, cohort_id, subject_id, title, exam_type, exam_date, location, coefficient)
 values
-  ('exam-001', 'c0a80101-0000-4000-8000-000000000001', 'sub-cardio-01', 'Contrôle Continu Cardiologie (QCM + Cas Clinique)', 'Contrôle Continu', now() + interval '12 days', 'Amphithéâtre Pasteur', 1.5),
-  ('exam-002', 'c0a80101-0000-4000-8000-000000000001', 'sub-pneumo-02', 'Partiel de Pneumologie', 'Examen Final', now() + interval '28 days', 'Hall des Examens B', 2.0)
+  ('c0a80101-0000-4000-8000-000000000401', 'c0a80101-0000-4000-8000-000000000001', 'c0a80101-0000-4000-8000-000000000101', 'Contrôle Continu Cardiologie (QCM + Cas Clinique)', 'Contrôle Continu', now() + interval '12 days', 'Amphithéâtre Pasteur', 1.5),
+  ('c0a80101-0000-4000-8000-000000000402', 'c0a80101-0000-4000-8000-000000000001', 'c0a80101-0000-4000-8000-000000000102', 'Partiel de Pneumologie', 'Examen Final', now() + interval '28 days', 'Hall des Examens B', 2.0)
 on conflict (id) do nothing;
 
 insert into public.exam_subjects (id, exam_id, subject_id)
 values
-  ('exsub-001', 'exam-001', 'sub-cardio-01'),
-  ('exsub-002', 'exam-002', 'sub-pneumo-02')
+  ('c0a80101-0000-4000-8000-000000000501', 'c0a80101-0000-4000-8000-000000000401', 'c0a80101-0000-4000-8000-000000000101'),
+  ('c0a80101-0000-4000-8000-000000000502', 'c0a80101-0000-4000-8000-000000000402', 'c0a80101-0000-4000-8000-000000000102')
 on conflict (id) do nothing;

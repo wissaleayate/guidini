@@ -20,30 +20,6 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
-const DEFAULT_ADMIN_PROFILE: Profile = {
-  id: 'admin-user-001',
-  email: 'admin.med@univ.dz',
-  full_name: 'Délégué de Promotion (Admin)',
-  role: 'admin',
-  cohort_id: 'c0a80101-0000-4000-8000-000000000001',
-  is_active: true,
-  status: 'active',
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-const DEFAULT_STUDENT_PROFILE: Profile = {
-  id: 'demo-student-id',
-  email: 'etudiant.med@univ.dz',
-  full_name: 'Étudiant en Médecine',
-  role: 'student',
-  cohort_id: 'c0a80101-0000-4000-8000-000000000001',
-  is_active: true,
-  status: 'active',
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
 function translateAuthError(message?: string): string {
   if (!message) return 'Une erreur est survenue lors de l\'authentification.';
   const lower = message.toLowerCase();
@@ -180,8 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
     } else {
-      // In local demo mode, initialize with demo student profile
-      setUser(DEFAULT_STUDENT_PROFILE);
+      setUser(null);
       setActualRole('student');
       setRole('student');
       setIsLoading(false);
@@ -199,23 +174,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, pass: string): Promise<{ success: boolean; role?: UserRole; error?: string }> => {
     if (!isConfigured) {
-      // Local simulation
-      if (email.toLowerCase().includes('admin')) {
-        setUser(DEFAULT_ADMIN_PROFILE);
-        setActualRole('admin');
-        setRole('admin');
-        return { success: true, role: 'admin' };
-      } else {
-        const student = {
-          ...DEFAULT_STUDENT_PROFILE,
-          email,
-          full_name: email.split('@')[0],
-        };
-        setUser(student);
-        setActualRole('student');
-        setRole('student');
-        return { success: true, role: 'student' };
-      }
+      return {
+        success: false,
+        error: 'Configuration Supabase absente. Veuillez renseigner vos variables d\'environnement.',
+      };
     }
 
     const supabase = createClient();
@@ -232,6 +194,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let resolvedRole: UserRole = 'student';
     if (data.user) {
+      // Sync profile securely on server
+      try {
+        await fetch('/api/auth/sync-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: data.user.id,
+            email: data.user.email,
+            fullName: data.user.user_metadata?.full_name,
+          }),
+        });
+      } catch (syncErr) {
+        console.warn('Sync profile on sign in notice:', syncErr);
+      }
+
       const { data: prof } = await supabase
         .from('profiles')
         .select('role, is_active, status')
@@ -258,22 +235,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     inviteCode?: string
   ): Promise<{ success: boolean; message?: string; error?: string }> => {
     if (!isConfigured) {
-      const newProfile: Profile = {
-        id: `stu-${Date.now()}`,
-        email: email.trim().toLowerCase(),
-        full_name: fullName.trim(),
-        role: 'student',
-        cohort_id: 'c0a80101-0000-4000-8000-000000000001',
-        is_active: true,
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      return {
+        success: false,
+        error: 'Configuration Supabase absente. Veuillez renseigner vos variables d\'environnement.',
       };
-      CohortService.saveRegisteredProfile(newProfile);
-      setUser(newProfile);
-      setActualRole('student');
-      setRole('student');
-      return { success: true };
     }
 
     const supabase = createClient();

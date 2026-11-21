@@ -54,26 +54,9 @@ export function AdminUsersView() {
         }
         setUsers(merged);
       } else {
-        // Fallback: display only real registered students from local store
+        // Fallback: display only real registered students if server is unreachable
         const registered = CohortService.getRegisteredStudents();
-        const adminProfile: Profile = {
-          id: 'admin-authorized-01',
-          email: 'admin.med@univ.dz',
-          full_name: 'Délégué de Promotion (Admin)',
-          role: 'admin',
-          cohort_id: 'c0a80101-0000-4000-8000-000000000001',
-          is_active: true,
-          status: 'active',
-          created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        const seen = new Set<string>();
-        const list = [adminProfile, ...registered].filter((u) => {
-          if (seen.has(u.email.toLowerCase())) return false;
-          seen.add(u.email.toLowerCase());
-          return true;
-        });
-        setUsers(list);
+        setUsers(registered);
       }
     } catch {
       const registered = CohortService.getRegisteredStudents();

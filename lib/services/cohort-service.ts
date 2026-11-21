@@ -29,7 +29,7 @@ import {
 import { cleanLessonTitleAndSource } from '@/lib/services/import-parser';
 
 // Helper to prevent requests from hanging indefinitely
-function withTimeout<T = any>(promise: PromiseLike<T> | Promise<T>, ms = 4000): Promise<T> {
+function withTimeout<T = any>(promise: PromiseLike<T> | Promise<T>, ms = 8000): Promise<T> {
   return Promise.race([
     Promise.resolve(promise),
     new Promise<T>((_, reject) =>
@@ -161,6 +161,25 @@ export class CohortService {
     }
     localCohort = { ...localCohort, ...updates, updated_at: new Date().toISOString() };
     return localCohort;
+  }
+
+  /**
+   * Resolves the primary active cohort UUID from Supabase or fallback
+   */
+  static async getActiveCohortId(): Promise<string> {
+    const supabase = createClient();
+    if (supabase) {
+      try {
+        const { data } = await withTimeout(
+          supabase.from('cohorts').select('id').limit(1).maybeSingle()
+        );
+        if (data?.id) {
+          localCohort.id = data.id;
+          return data.id;
+        }
+      } catch {}
+    }
+    return localCohort.id;
   }
 
   // =========================================================================
@@ -309,7 +328,7 @@ export class CohortService {
             }
           }
 
-          return subjectsData.map((s: any) => ({
+          const formatted = subjectsData.map((s: any) => ({
             ...s,
             units: (s.units || [])
               .filter((u: any) => !u.is_archived)
@@ -335,6 +354,8 @@ export class CohortService {
                   })),
               })),
           }));
+          localSubjects = formatted;
+          return formatted;
         }
       } catch (err) {
         console.warn('Supabase curriculum fetch error or timeout, falling back:', err);
@@ -399,6 +420,7 @@ export class CohortService {
   ): Promise<Subject> {
     const supabase = createClient();
     const displayOrder = localSubjects.length + 1;
+    const activeCohortId = await this.getActiveCohortId();
 
     if (supabase) {
       try {
@@ -406,7 +428,7 @@ export class CohortService {
           supabase
             .from('subjects')
             .insert({
-              cohort_id: localCohort.id,
+              cohort_id: activeCohortId,
               academic_unit_id: academicUnitId || null,
               is_independent: isIndependent,
               name: name.trim(),
@@ -418,19 +440,23 @@ export class CohortService {
             .select()
             .single()
         );
-        if (data && !error) {
+        if (error) {
+          throw new Error(`Erreur lors de la création du module: ${error.message}`);
+        }
+        if (data) {
           const newSub: SubjectWithUnits = { ...data, units: [] };
           localSubjects.push(newSub);
           return data;
         }
-      } catch (err) {
-        console.warn('Supabase createSubject error:', err);
+      } catch (err: any) {
+        console.error('Supabase createSubject error:', err);
+        throw err;
       }
     }
 
     const newSubject: SubjectWithUnits = {
       id: `sub-${Date.now()}`,
-      cohort_id: localCohort.id,
+      cohort_id: activeCohortId,
       academic_unit_id: academicUnitId || null,
       is_independent: isIndependent,
       name: name.trim(),
@@ -454,11 +480,15 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await withTimeout(
+        const { error } = await withTimeout(
           supabase.from('subjects').update(updates).eq('id', subjectId)
         );
-      } catch (err) {
-        console.warn('Supabase updateSubject error:', err);
+        if (error) {
+          throw new Error(`Erreur lors de la mise à jour du module: ${error.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase updateSubject error:', err);
+        throw err;
       }
     }
 
@@ -475,9 +505,13 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await withTimeout(supabase.from('subjects').delete().eq('id', subjectId));
-      } catch (err) {
-        console.warn('Supabase deleteSubject error:', err);
+        const { error } = await withTimeout(supabase.from('subjects').delete().eq('id', subjectId));
+        if (error) {
+          throw new Error(`Erreur lors de la suppression du module: ${error.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase deleteSubject error:', err);
+        throw err;
       }
     }
     localSubjects = localSubjects.filter((s) => s.id !== subjectId);
@@ -490,15 +524,20 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await Promise.all(
+        const results = await Promise.all(
           orderedIds.map((id, index) =>
             withTimeout(
               supabase.from('subjects').update({ display_order: index + 1 }).eq('id', id)
             )
           )
         );
-      } catch (err) {
-        console.warn('Supabase reorderSubjects error:', err);
+        const firstErr = results.find((r: any) => r?.error)?.error;
+        if (firstErr) {
+          throw new Error(`Erreur lors du réordonnancement des modules: ${firstErr.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase reorderSubjects error:', err);
+        throw err;
       }
     }
 
@@ -543,14 +582,18 @@ export class CohortService {
             .select()
             .single()
         );
-        if (data && !error) {
+        if (error) {
+          throw new Error(`Erreur lors de la création de l'unité: ${error.message}`);
+        }
+        if (data) {
           if (targetSubject) {
             targetSubject.units.push({ ...data, lessons: [] });
           }
           return data;
         }
-      } catch (err) {
-        console.warn('Supabase createUnit error:', err);
+      } catch (err: any) {
+        console.error('Supabase createUnit error:', err);
+        throw err;
       }
     }
 
@@ -577,9 +620,15 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await withTimeout(supabase.from('units').update(updates).eq('id', unitId));
-      } catch (err) {
-        console.warn('Supabase updateUnit error:', err);
+        const { error } = await withTimeout(
+          supabase.from('units').update(updates).eq('id', unitId)
+        );
+        if (error) {
+          throw new Error(`Erreur lors de la mise à jour de l'unité: ${error.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase updateUnit error:', err);
+        throw err;
       }
     }
 
@@ -599,9 +648,13 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await withTimeout(supabase.from('units').delete().eq('id', unitId));
-      } catch (err) {
-        console.warn('Supabase deleteUnit error:', err);
+        const { error } = await withTimeout(supabase.from('units').delete().eq('id', unitId));
+        if (error) {
+          throw new Error(`Erreur lors de la suppression de l'unité: ${error.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase deleteUnit error:', err);
+        throw err;
       }
     }
 
@@ -617,15 +670,20 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await Promise.all(
+        const results = await Promise.all(
           orderedIds.map((id, index) =>
             withTimeout(
               supabase.from('units').update({ display_order: index + 1 }).eq('id', id)
             )
           )
         );
-      } catch (err) {
-        console.warn('Supabase reorderUnits error:', err);
+        const firstErr = results.find((r: any) => r?.error)?.error;
+        if (firstErr) {
+          throw new Error(`Erreur lors du réordonnancement des unités: ${firstErr.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase reorderUnits error:', err);
+        throw err;
       }
     }
 
@@ -696,9 +754,22 @@ export class CohortService {
             .select()
             .single()
         );
-        if (data && !error) return data;
-      } catch (err) {
-        console.warn('Supabase createLesson error:', err);
+        if (error) {
+          throw new Error(`Erreur lors de l'enregistrement du cours dans Supabase: ${error.message}`);
+        }
+        if (data) {
+          for (const sub of localSubjects) {
+            const u = sub.units.find((item) => item.id === unitId);
+            if (u) {
+              u.lessons.push({ ...data, revision_target: revisionTarget });
+              break;
+            }
+          }
+          return data;
+        }
+      } catch (err: any) {
+        console.error('Supabase createLesson error:', err);
+        throw err;
       }
     }
 
@@ -755,14 +826,18 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await withTimeout(
+        const { error } = await withTimeout(
           supabase
             .from('lessons')
             .update({ ...updates, updated_at: new Date().toISOString() })
             .eq('id', lessonId)
         );
-      } catch (err) {
-        console.warn('Supabase updateLesson error:', err);
+        if (error) {
+          throw new Error(`Erreur lors de la mise à jour du cours: ${error.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase updateLesson error:', err);
+        throw err;
       }
     }
 
@@ -845,11 +920,15 @@ export class CohortService {
       // Soft-archive to protect student progress
       if (supabase) {
         try {
-          await withTimeout(
+          const { error } = await withTimeout(
             supabase.from('lessons').update({ is_archived: true }).eq('id', lessonId)
           );
-        } catch (err) {
-          console.warn('Supabase archiveLesson error:', err);
+          if (error) {
+            throw new Error(`Erreur lors de l'archivage du cours: ${error.message}`);
+          }
+        } catch (err: any) {
+          console.error('Supabase archiveLesson error:', err);
+          throw err;
         }
       }
 
@@ -866,9 +945,13 @@ export class CohortService {
 
     if (supabase) {
       try {
-        await withTimeout(supabase.from('lessons').delete().eq('id', lessonId));
-      } catch (err) {
-        console.warn('Supabase deleteLesson error:', err);
+        const { error } = await withTimeout(supabase.from('lessons').delete().eq('id', lessonId));
+        if (error) {
+          throw new Error(`Erreur lors de la suppression du cours: ${error.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase deleteLesson error:', err);
+        throw err;
       }
     }
 
@@ -886,15 +969,20 @@ export class CohortService {
     const supabase = createClient();
     if (supabase) {
       try {
-        await Promise.all(
+        const results = await Promise.all(
           orderedIds.map((id, index) =>
             withTimeout(
               supabase.from('lessons').update({ display_order: index + 1 }).eq('id', id)
             )
           )
         );
-      } catch (err) {
-        console.warn('Supabase reorderLessons error:', err);
+        const firstErr = results.find((r: any) => r?.error)?.error;
+        if (firstErr) {
+          throw new Error(`Erreur lors du réordonnancement des cours: ${firstErr.message}`);
+        }
+      } catch (err: any) {
+        console.error('Supabase reorderLessons error:', err);
+        throw err;
       }
     }
 

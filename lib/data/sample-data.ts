@@ -16,7 +16,7 @@ export const INITIAL_COHORT: Cohort = {
 
 export const INITIAL_ACADEMIC_UNITS: AcademicUnit[] = [
   {
-    id: 'unit-cardio-pulm-01',
+    id: 'c0a80101-0000-4000-8000-000000000011',
     cohort_id: INITIAL_COHORT.id,
     name: 'Unité 01 – Cardiovasculo-Pulmonaire',
     code: 'UE-01',
@@ -26,7 +26,7 @@ export const INITIAL_ACADEMIC_UNITS: AcademicUnit[] = [
     status: 'in_progress',
   },
   {
-    id: 'unit-neuro-hem-02',
+    id: 'c0a80101-0000-4000-8000-000000000012',
     cohort_id: INITIAL_COHORT.id,
     name: 'Unité 02 – Neuro / Hémato / Locomoteur',
     code: 'UE-02',
@@ -36,7 +36,7 @@ export const INITIAL_ACADEMIC_UNITS: AcademicUnit[] = [
     status: 'not_started',
   },
   {
-    id: 'unit-endo-uro-03',
+    id: 'c0a80101-0000-4000-8000-000000000013',
     cohort_id: INITIAL_COHORT.id,
     name: 'Unité 03 – Endocrino / Uro-génital',
     code: 'UE-03',
@@ -46,7 +46,7 @@ export const INITIAL_ACADEMIC_UNITS: AcademicUnit[] = [
     status: 'not_started',
   },
   {
-    id: 'unit-gastro-hem-04',
+    id: 'c0a80101-0000-4000-8000-000000000014',
     cohort_id: INITIAL_COHORT.id,
     name: 'Unité 04 – Gastro / Hémato',
     code: 'UE-04',
@@ -62,7 +62,7 @@ export const INITIAL_SUBJECTS: SubjectWithUnits[] = [
   {
     id: 'sub-bioch-01',
     cohort_id: INITIAL_COHORT.id,
-    academic_unit_id: 'unit-cardio-pulm-01',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000011',
     is_independent: false,
     name: 'Biochimie',
     code: 'BIO-01',
@@ -121,7 +121,7 @@ export const INITIAL_SUBJECTS: SubjectWithUnits[] = [
   {
     id: 'sub-physio-02',
     cohort_id: INITIAL_COHORT.id,
-    academic_unit_id: 'unit-cardio-pulm-01',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000011',
     is_independent: false,
     name: 'Physiopathologie',
     code: 'PHYS-01',
@@ -236,7 +236,7 @@ export const INITIAL_SUBJECTS: SubjectWithUnits[] = [
   {
     id: 'sub-radio-03',
     cohort_id: INITIAL_COHORT.id,
-    academic_unit_id: 'unit-cardio-pulm-01',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000011',
     is_independent: false,
     name: 'Radiologie',
     code: 'RAD-01',
@@ -315,7 +315,7 @@ export const INITIAL_SUBJECTS: SubjectWithUnits[] = [
   {
     id: 'sub-semio-04',
     cohort_id: INITIAL_COHORT.id,
-    academic_unit_id: 'unit-cardio-pulm-01',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000011',
     is_independent: false,
     name: 'Sémiologie',
     code: 'SEM-01',
@@ -534,7 +534,7 @@ export const INITIAL_SUBJECTS: SubjectWithUnits[] = [
   {
     id: 'sub-psycho-05',
     cohort_id: INITIAL_COHORT.id,
-    academic_unit_id: 'unit-cardio-pulm-01',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000011',
     is_independent: false,
     name: 'Psychologie Médicale',
     code: 'PSY-01',
@@ -715,7 +715,7 @@ export const INITIAL_EXAMS: Exam[] = [
     id: 'exam-unit-01',
     cohort_id: INITIAL_COHORT.id,
     target_type: 'unit',
-    academic_unit_id: 'unit-cardio-pulm-01',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000011',
     academic_unit_name: 'Unité 01 – Cardiovasculo-Pulmonaire',
     title: 'Contrôle Semestriel – Unité 01 : Cardiovasculo-Pulmonaire',
     exam_type: 'Contrôle Continu',
@@ -729,7 +729,7 @@ export const INITIAL_EXAMS: Exam[] = [
     id: 'exam-unit-02',
     cohort_id: INITIAL_COHORT.id,
     target_type: 'unit',
-    academic_unit_id: 'unit-neuro-hem-02',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000012',
     academic_unit_name: 'Unité 02 – Neuro / Hémato / Locomoteur',
     title: 'Contrôle Semestriel – Unité 02 : Neuro / Hémato / Locomoteur',
     exam_type: 'Contrôle Continu',
@@ -743,7 +743,7 @@ export const INITIAL_EXAMS: Exam[] = [
     id: 'exam-unit-03',
     cohort_id: INITIAL_COHORT.id,
     target_type: 'unit',
-    academic_unit_id: 'unit-endo-uro-03',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000013',
     academic_unit_name: 'Unité 03 – Endocrino / Uro-génital',
     title: 'Contrôle Semestriel – Unité 03 : Endocrino / Uro-génital',
     exam_type: 'Contrôle Continu',
@@ -757,7 +757,7 @@ export const INITIAL_EXAMS: Exam[] = [
     id: 'exam-unit-04',
     cohort_id: INITIAL_COHORT.id,
     target_type: 'unit',
-    academic_unit_id: 'unit-gastro-hem-04',
+    academic_unit_id: 'c0a80101-0000-4000-8000-000000000014',
     academic_unit_name: 'Unité 04 – Gastro / Hémato',
     title: 'Contrôle Semestriel – Unité 04 : Gastro / Hémato',
     exam_type: 'Contrôle Continu',

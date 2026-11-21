@@ -26,7 +26,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [inviteCode, setInviteCode] = useState('MED-2026-ALG');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,9 +47,31 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!inviteCode.trim()) {
+      setError('Le code d\'invitation de la promotion est obligatoire.');
+      return;
+    }
+
     setLoading(true);
 
-    const res = await signUp(email, password, fullName, inviteCode);
+    // Validate invite code with server before attempting registration
+    try {
+      const validateRes = await fetch('/api/auth/validate-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase() }),
+      });
+      if (!validateRes.ok) {
+        const valData = await validateRes.json();
+        setError(valData.error || 'Code d\'invitation invalide ou expiré.');
+        setLoading(false);
+        return;
+      }
+    } catch (valErr) {
+      console.warn('Invite validation network error:', valErr);
+    }
+
+    const res = await signUp(email, password, fullName, inviteCode.trim().toUpperCase());
     setLoading(false);
 
     if (res.success) {
